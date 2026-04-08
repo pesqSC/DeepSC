@@ -10,7 +10,7 @@ build
 # virtual enviornment
 /.env/*
 /.idea/*
-
+data
 # models
 checkpoints/
 /checkpoints/deepsc-AWGN/*
