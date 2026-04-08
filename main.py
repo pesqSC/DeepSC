@@ -99,7 +99,7 @@ def train(epoch, args, net, mi_net=None):
 if __name__ == '__main__':
     # setup_seed(10)
     args = parser.parse_args()
-    args.vocab_file = '/import/antennas/Datasets/hx301/' + args.vocab_file
+    args.vocab_file = './data/train/' + args.vocab_file
     """ preparing the dataset """
     vocab = json.load(open(args.vocab_file, 'rb'))
     token_to_idx = vocab['token_to_idx']

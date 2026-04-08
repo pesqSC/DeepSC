@@ -104,6 +104,7 @@ def performance(args, SNR, net):
                                pin_memory=True, collate_fn=collate_data)
 
     StoT = SeqtoText(token_to_idx, end_idx)
+
     score = []
     score2 = []
     net.eval()
@@ -133,7 +134,7 @@ def performance(args, SNR, net):
                     target_sent = target.cpu().numpy().tolist()
                     result_string = list(map(StoT.sequence_to_text, target_sent))
                     target_word = target_word + result_string
-
+                print(snr, word, target_word)
                 Tx_word.append(word)
                 Rx_word.append(target_word)
 
@@ -160,7 +161,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     SNR = [0,3,6,9,12,15,18]
 
-    args.vocab_file = '/import/antennas/Datasets/hx301/' + args.vocab_file
+    args.vocab_file = 'data/train/' + args.vocab_file
     vocab = json.load(open(args.vocab_file, 'rb'))
     token_to_idx = vocab['token_to_idx']
     idx_to_token = dict(zip(token_to_idx.values(), token_to_idx.keys()))

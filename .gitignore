@@ -10,10 +10,13 @@ build
 # virtual enviornment
 /.env/*
 /.idea/*
-
+data
 # models
 checkpoints/
 /checkpoints/deepsc-AWGN/*
 /checkpoints/deepsc-mi-awgn/*
 /checkpoints/deepsc-mi/Rayleigh/*
 /checkpoints/deepsc-Rayleigh/* 
+
+europarl.tgz
+.continue/
