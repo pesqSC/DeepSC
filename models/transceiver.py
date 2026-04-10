@@ -282,23 +282,3 @@ class DeepSC(nn.Module):
         self.dense = nn.Linear(d_model, trg_vocab_size)
 
 
-
-    
-        
-        
-        
-        
-        
-
-    
-
-    
-    
-    
-    
-    
-
-
-    
-
-
