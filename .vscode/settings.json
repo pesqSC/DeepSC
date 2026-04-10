@@ -4,5 +4,13 @@
         "deepsc",
         "europarl",
         "Rician"
-    ]
+    ],
+    "cSpell.language": "en",
+    "formattingToggle.affects": [
+        "editor.formatOnPaste",
+        "editor.formatOnSave",
+        "editor.formatOnType"
+    ],
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true
 }
