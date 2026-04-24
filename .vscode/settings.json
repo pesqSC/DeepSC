@@ -4,5 +4,26 @@
         "deepsc",
         "europarl",
         "Rician"
+    ],
+    "cSpell.language": "en",
+    "formattingToggle.affects": [
+        "editor.formatOnPaste",
+        "editor.formatOnSave",
+        "editor.formatOnType"
+    ],
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.linting.pylintArgs": [
+        "--disable=C0103",
+        "--disable=C0114",
+        "--disable=C0115",
+        "--disable=C0116",
+        "--disable=C0117",
+        "--disable=C0118",
+        "--disable=C0119",
+        "--disable=C0120",
+        "--disable=C0121",
     ]
 }

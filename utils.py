@@ -10,10 +10,17 @@ import math
 import torch
 import time
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from w3lib.html import remove_tags
 from nltk.translate.bleu_score import sentence_bleu
 from models.mutual_info import sample_batch, mutual_information
+from typing import Optional, Tuple
+from tqdm import tqdm
+
+
+from models.rx_model import Receiver
+from student import Student
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -392,3 +399,152 @@ def greedy_decode(model, src, n_var, max_len, padding_idx, start_symbol, channel
 
 
 
+@torch.no_grad()
+def validate_one_epoch(
+    transmitter,
+    teacher: Receiver,
+    student: Student,
+    val_loader,
+    pad_idx,
+    channel,
+    noise_std,
+    device: torch.device,
+    criterion,
+    args,
+):
+    transmitter.eval()
+    teacher.eval()
+    student.eval()
+
+    total_loss = 0.0
+    total_ce = 0.0
+    total_kd = 0.0
+    total_feat = 0.0
+
+    pbar = tqdm(val_loader)
+
+    for batch in pbar:
+        sents = batch.to(device)
+        targets = batch.to(device)
+
+        trg_inp = targets[:, :-1]
+        trg_real = targets[:, 1:]
+
+        src_mask, look_ahead_mask = create_masks(sents, trg_inp, pad_idx)
+
+        tx_en_out, tx_ch_en_out, Tx_sig, z_noisy = transmitter(
+            sents, 
+            src_mask, 
+            channel, 
+            noise_std
+        )
+
+        t_logits, rx_ch_dec_out, rx_dec_out = teacher(
+            z_noisy=z_noisy, 
+            trg_inp=trg_inp, 
+            look_ahead_mask=look_ahead_mask,
+            src_mask=src_mask
+        )
+
+        s_logits, s_ch_dec_out, s_dec_out = student(
+            z_noisy, 
+            trg_inp, 
+            look_ahead_mask, 
+            src_mask
+        )
+        
+
+        # ce = masked_ce_loss(s_logits, trg_real, pad_idx)
+        ce = loss_function(
+            s_logits.contiguous().view(-1, s_logits.size(-1)),
+            trg_real.contiguous().view(-1), 
+            pad_idx, 
+            criterion
+        )
+
+        kd = kd_kl_loss(s_logits, t_logits, trg_real, pad_idx, args.temperature)
+        
+        # feat = masked_mse_loss(s_ch_dec_out, rx_ch_dec_out.detach(), trg_real, pad_idx)
+
+        loss = args.alpha * ce + args.beta * kd + args.gamma # * feat
+
+        total_loss += float(loss.item())
+        total_ce += float(ce.item())
+        total_kd += float(kd.item())
+        # total_feat += float(feat.item())
+
+    n = max(len(val_loader), 1)
+    return {
+        "loss": total_loss / n,
+        "ce": total_ce / n,
+        "kd": total_kd / n,
+        # "feat": total_feat / n,
+    }
+
+
+# -----------------------------
+# Checkpoint helpers
+# -----------------------------
+def save_student_receiver(student: Student, path: str, meta: Optional[dict] = None) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    payload = {
+        "channel_decoder": student.channel_decoder.state_dict(),
+        "decoder": student.decoder.state_dict(),
+        "dense": student.dense.state_dict(),
+    }
+    if meta is not None:
+        payload["meta"] = meta
+    torch.save(payload, path)
+
+
+def feature_distillation_loss(student_feat, teacher_feat, targets, pad_idx):
+    """
+    MSE loss for feature-level distillation
+    Args:
+        student_feat: [B, T, D] student features
+        teacher_feat: [B, T, D] teacher features  
+        targets: [B, T] target tokens (for masking)
+        pad_idx: padding index
+    """
+    # Create mask for valid positions
+    mask = (targets != pad_idx).unsqueeze(-1).float()  # [B, T, 1]
+    
+    # Compute MSE loss
+    mse_loss = F.mse_loss(student_feat, teacher_feat, reduction='none')  # [B, T, D]
+    
+    # Apply mask and average
+    masked_loss = (mse_loss * mask).sum() / mask.sum().clamp_min(1.0)
+    
+    return masked_loss
+
+def masked_ce_loss(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    pad_idx: int,
+) -> torch.Tensor:
+    # logits: [B,T,V], targets: [B,T]
+    vocab_size = logits.size(-1)
+    loss = F.cross_entropy(
+        logits.reshape(-1, vocab_size),
+        targets.reshape(-1),
+        reduction="none",
+        ignore_index=pad_idx,
+    )
+    valid = (targets.reshape(-1) != pad_idx).float()
+    return (loss * valid).sum() / valid.sum().clamp_min(1.0)
+
+def kd_kl_loss(
+    student_logits: torch.Tensor,
+    teacher_logits: torch.Tensor,
+    targets: torch.Tensor,
+    pad_idx: int,
+    temperature: float,
+) -> torch.Tensor:
+    # apply mask so PAD tokens don't dominate KD
+    s_log_prob = F.log_softmax(student_logits / temperature, dim=-1)
+    t_prob = F.softmax(teacher_logits / temperature, dim=-1)
+
+    kl = F.kl_div(s_log_prob, t_prob, reduction="none").sum(dim=-1)  # [B,T]
+    valid = (targets != pad_idx).float()
+    kl = (kl * valid).sum() / valid.sum().clamp_min(1.0)
+    return kl * (temperature ** 2)
