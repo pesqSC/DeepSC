@@ -375,7 +375,7 @@ def main():
         s1_val_stats = validate_one_epoch(
             transmitter=transmitter, 
             teacher=receiver, 
-            student=student[0], 
+            student=students[0], 
             val_loader=val_loader, 
             pad_idx=pad_idx,
             device=device,
