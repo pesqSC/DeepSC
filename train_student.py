@@ -222,7 +222,7 @@ def main():
     deep_sc = build_teacher(
         num_vocab, 
         args.max_len, 
-        args.num_layers, 
+        12, 
         args.d_model, 
         args.num_heads, 
         args.dff, 
@@ -231,7 +231,8 @@ def main():
     )
 
     
-    deep_sc.load_state_dict(torch.load(args.teacher_checkpoint, map_location=device))
+    # deep_sc.load_state_dict(torch.load(args.teacher_checkpoint, map_location=device))
+    deep_sc.load_state_dict(torch.load('deepsc_12n.pth', map_location=device))
     deep_sc.eval()
 
     transmitter = Transmitter(deep_sc.encoder, deep_sc.channel_encoder)
