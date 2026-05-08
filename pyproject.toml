@@ -5,8 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "matplotlib>=3.10.9",
+    "networkx>=3.6.1",
     "nltk>=3.9.3",
+    "numpy>=2.4.2",
     "scikit-learn>=1.8.0",
+    "sentence-transformers>=5.4.1",
     "torch>=2.10.0",
     "tqdm>=4.67.3",
     "w3lib>=2.4.0",
