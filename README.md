@@ -48,6 +48,14 @@ pip install -e .
 - `models/rx_model.py`: receiver split module.
 - `utils.py`: masks, channels, decoding, losses, and save helpers.
 
+## Preprocess
+
+```shell
+mkdir data
+wget http://www.statmt.org/europarl/v7/europarl.tgz
+tar zxvf europarl.tgz
+pytho
+
 ## Data Preparation
 
 1. Place Europarl text files under `data/txt/en/`.
