@@ -203,7 +203,6 @@ def train(
         pbar.set_description(
                 'Epoch: {};  Type: Train; Loss_s1: {:.4f}\nLoss_s2: {:.4f}'
                 .format(epoch + 1, loss_s1.item(), loss_s2.item())
-                .format(args.current_epoch + 1, loss_s1.item(), loss_s2.item())
             )
         
         if args.grad_clip is not None and args.grad_clip > 0:
