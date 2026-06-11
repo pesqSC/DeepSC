@@ -20,3 +20,4 @@ checkpoints/
 
 europarl.tgz
 .continue/
+*.pth
