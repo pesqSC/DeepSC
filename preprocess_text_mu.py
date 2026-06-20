@@ -6,6 +6,7 @@ import json
 import pickle
 import argparse
 from collections import Counter
+from tqdm import tqdm
 
 try:
     from w3lib.html import remove_tags
@@ -172,7 +173,7 @@ def main():
     # 1. Build multilingual vocab
     all_sentences = []
 
-    for path in files.values():
+    for path in tqdm(files.values()):
         for line in read_file(path):
             line = normalize_text(line)
             if valid_sentence(line, args.min_len, args.max_len):
@@ -207,7 +208,7 @@ def main():
         "en_fr": make_parallel_dataset(files["en"], files["fr"], token_to_idx, "fr", args.min_len, args.max_len),
     }
 
-    for name, data in datasets.items():
+    for name, data in tqdm(datasets.items()):
         split = int(len(data) * args.train_ratio)
 
         train_data = data[:split]
