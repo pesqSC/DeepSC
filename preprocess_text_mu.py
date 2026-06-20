@@ -173,12 +173,12 @@ def main():
     # 1. Build multilingual vocab
     all_sentences = []
 
-    for path in tqdm(files.values()):
-        for line in tqdm(read_file(path)):
+    for path in tqdm(files.values(), desc="Processing files"):
+        for line in tqdm(read_file(path), desc=f"Reading {path.name}", leave=False):
             line = normalize_text(line)
             if valid_sentence(line, args.min_len, args.max_len):
                 all_sentences.append(line)
-
+                
     vocab = build_vocab(all_sentences, args.min_count)
 
     vocab_path = os.path.join(args.output_dir, "vocab_multilingual.json")
