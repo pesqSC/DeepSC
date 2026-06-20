@@ -174,7 +174,7 @@ def main():
     all_sentences = []
 
     for path in tqdm(files.values()):
-        for line in read_file(path):
+        for line in tqdm(read_file(path)):
             line = normalize_text(line)
             if valid_sentence(line, args.min_len, args.max_len):
                 all_sentences.append(line)
