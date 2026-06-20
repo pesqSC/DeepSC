@@ -92,8 +92,8 @@ def main():
     parser.add_argument('--dff', default=512, type=int)
     parser.add_argument('--num-layers', default=4, type=int)
     parser.add_argument('--num-heads', default=8, type=int)
-    parser.add_argument('--batch-size', default=74, type=int)
-    parser.add_argument('--epochs', default=20, type=int) 
+    parser.add_argument('--batch-size', default=128, type=int)
+    parser.add_argument('--epochs', default=200, type=int) 
     parser.add_argument('--en', default='en_en', type=str)
     parser.add_argument('--en-pt', default='en_pt', type=str)
     parser.add_argument('--en-es', default='en_es', type=str)
@@ -131,7 +131,6 @@ def main():
         if avg_acc < record_acc:
             if not os.path.exists(args.checkpoint_path):
                 os.makedirs(args.checkpoint_path)
-            print(deepsc.state_dict())
             encoder_state_dict = {
                 "encoder": deepsc.encoder.state_dict(),
                 "channel_encoder": deepsc.channel_encoder.state_dict(),
