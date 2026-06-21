@@ -9,6 +9,7 @@ dependencies = [
     "networkx>=3.6.1",
     "nltk>=3.9.3",
     "numpy>=2.4.2",
+    "rouge-score>=0.1.2",
     "scikit-learn>=1.8.0",
     "sentence-transformers>=5.4.1",
     "torch>=2.10.0",

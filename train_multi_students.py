@@ -26,7 +26,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Receiver-only KD for DeepSC")
 
     # files
-    parser.add_argument("--vocab-file", type=str, default="./data/train/europarl/vocab.json")
+    parser.add_argument("--vocab-file", type=str, default="./data/train/europarl/vocab_multilingual.json")
     parser.add_argument("--teacher-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/checkpoint_100.pth")
     parser.add_argument("--save-dir", type=str, default="./checkpoints/tr_kd")
 
