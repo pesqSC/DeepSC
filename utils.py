@@ -18,6 +18,7 @@ from models.mutual_info import sample_batch, mutual_information
 from typing import Optional, Tuple
 from tqdm import tqdm
 
+import random
 
 from models.rx_model import Receiver
 from student import Student
@@ -685,3 +686,12 @@ def kd_kl_loss(
     valid = (targets != pad_idx).float()
     kl = (kl * valid).sum() / valid.sum().clamp_min(1.0)
     return kl * (temperature ** 2)
+
+
+def setup_seed(seed: int) -> None:
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
