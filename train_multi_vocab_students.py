@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from dataset_multilingual import EurParallelDataset, collate_parallel
 from dataset import EurDataset, collate_data
 
 import argparse
@@ -62,6 +63,10 @@ def parse_args():
     parser.add_argument("--beta", type=float, default=0.5, help="KD weight")
     parser.add_argument("--gamma", type=float, default=0.1, help="Feature MSE weight")
     parser.add_argument("--init-student-from-teacher", action="store_true")
+    parser.add_argument('--en', default='en_en', type=str)
+    parser.add_argument('--en-pt', default='en_pt', type=str)
+    parser.add_argument('--en-es', default='en_es', type=str)
+    parser.add_argument('--en-fr', default='en_fr', type=str)
 
     return parser.parse_args()
 
@@ -254,8 +259,8 @@ def main():
     start_idx = token_to_idx["<START>"]
     end_idx = token_to_idx["<END>"]
 
-    train_set = EurDataset("train")
-    test_set = EurDataset("test")
+    train_set = EurParallelDataset(args.en, 'train')
+    test_set = EurParallelDataset(args.en, "test")
 
 
     train_loader = DataLoader(
