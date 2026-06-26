@@ -251,14 +251,16 @@ def train(
         #         'Epoch: {};  Type: Train; Loss_s1: {:.4f}\nLoss_s2: {:.4f}'
         #         .format(epoch + 1, loss_s1.item(), loss_s2.item())
         #     )
-        pbar.set_description(
-                'Epoch: {};  Type: Train; Loss_s1: {:.4f}'
-                .format(epoch + 1, loss_s1.item())
-            )
-        pbar.set_description(
-                'Epoch: {};  Type: Train; Loss_s2: {:.4f}'
-                .format(epoch + 1, loss_s2.item())
-            )
+        pbar.set_description(f"Epoch {epoch + 1} Train")
+
+        pbar.set_postfix(
+            L1=f"{loss_s1.item():.3f}",
+            CE1=f"{s1_ce.item():.3f}",
+            KD1=f"{kd_s1.item():.3f}",
+            L2=f"{loss_s2.item():.3f}",
+            CE2=f"{s2_ce.item():.3f}",
+            KD2=f"{kd_s2.item():.3f}",
+        )
 
     n = len(train_loader)
     return [
