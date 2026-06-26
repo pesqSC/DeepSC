@@ -402,10 +402,10 @@ def greedy_decode(model, src, n_var, max_len, padding_idx, start_symbol, channel
 
 
 @torch.no_grad()
-def validate_one_epoch(
+def validate_multi_epoch(
     transmitter,
     teacher: Receiver,
-    student: Student,
+    students: [Student],
     val_loader,
     pad_idx,
     channel,
@@ -416,72 +416,119 @@ def validate_one_epoch(
 ):
     transmitter.eval()
     teacher.eval()
-    student.eval()
+    for student in students:
+        student.eval()
 
-    total_loss = 0.0
-    total_ce = 0.0
-    total_kd = 0.0
-    total_feat = 0.0
+    student_1, student_2 = students
+
+    total_loss_s1 = 0.0
+    total_ce_s1 = 0.0
+    total_kd_s1 = 0.0
+    total_feat_s1 = 0.0
+
+    total_loss_s2 = 0.0
+    total_ce_s2 = 0.0
+    total_kd_s2 = 0.0
+    total_feat_s2 = 0.0
 
     pbar = tqdm(val_loader)
 
-    for batch in pbar:
-        sents = batch.to(device)
-        targets = batch.to(device)
+    with torch.no_grad():
+        for src, trg in pbar:
+            src = src.to(device)
+            trg = trg.to(device)
 
-        trg_inp = targets[:, :-1]
-        trg_real = targets[:, 1:]
+            trg_inp = trg[:, :-1]
+            trg_real = trg[:, 1:]
 
-        src_mask, look_ahead_mask = create_masks(sents, trg_inp, pad_idx)
+            src_mask, look_ahead_mask = create_masks(sents, trg_inp, pad_idx)
 
-        tx_en_out, tx_ch_en_out, Tx_sig, z_noisy = transmitter(
-            sents, 
-            src_mask, 
-            channel, 
-            noise_std
-        )
+            tx_en_out, tx_ch_en_out, Tx_sig, z_noisy = transmitter(
+                src, 
+                src_mask, 
+                channel, 
+                noise_std
+            )
 
-        t_logits, rx_ch_dec_out, rx_dec_out = teacher(
-            z_noisy=z_noisy, 
-            trg_inp=trg_inp, 
-            look_ahead_mask=look_ahead_mask,
-            src_mask=src_mask
-        )
+            t_logits, rx_ch_dec_out, rx_dec_out = teacher(
+                z_noisy=z_noisy, 
+                trg_inp=trg_inp, 
+                look_ahead_mask=look_ahead_mask,
+                src_mask=src_mask
+            )
 
-        s_logits, s_ch_dec_out, s_dec_out = student(
-            z_noisy, 
-            trg_inp, 
-            look_ahead_mask, 
-            src_mask
-        )
-        
+            s1_logits, s1_ch_dec_out, s1_dec_out = student_1(
+                z_noisy, 
+                trg_inp, 
+                look_ahead_mask, 
+                src_mask
+            )
 
-        # ce = masked_ce_loss(s_logits, trg_real, pad_idx)
-        ce = loss_function(
-            s_logits.contiguous().view(-1, s_logits.size(-1)),
-            trg_real.contiguous().view(-1), 
-            pad_idx, 
-            criterion
-        )
+            s2_logits, s2_ch_dec_out, s2_dec_out = student_2(
+                z_noisy, 
+                trg_inp, 
+                look_ahead_mask, 
+                src_mask
+            )
+            
 
-        kd = kd_kl_loss(s_logits, t_logits, trg_real, pad_idx, args.temperature)
-        
-        # feat = masked_mse_loss(s_ch_dec_out, rx_ch_dec_out.detach(), trg_real, pad_idx)
+            # ce = masked_ce_loss(s_logits, trg_real, pad_idx)
+            ce_s1 = loss_function(
+                s1_logits.contiguous().view(-1, s1_logits.size(-1)),
+                trg_real.contiguous().view(-1), 
+                pad_idx, 
+                criterion
+            )
 
-        loss = args.alpha * ce + args.beta * kd + args.gamma # * feat
+            ce_s2 = loss_function(
+                s2_logits.contiguous().view(-1, s2_logits.size(-1)),
+                trg_real.contiguous().view(-1), 
+                pad_idx, 
+                criterion
+            )
 
-        total_loss += float(loss.item())
-        total_ce += float(ce.item())
-        total_kd += float(kd.item())
-        # total_feat += float(feat.item())
+
+            kd_s1 = kd_kl_loss(s1_logits, t_logits, trg_real, pad_idx, args.temperature)
+            kd_s2 = kd_kl_loss(s2_logits, t_logits, trg_real, pad_idx, args.temperature)
+            
+            # feat = masked_mse_loss(s_ch_dec_out, rx_ch_dec_out.detach(), trg_real, pad_idx)
+
+            loss_s1 = (args.alpha * ce_s1) + (args.beta * kd_s1) #args.gamma # * feat
+            loss_s2 = (args.alpha * ce_s2) + (args.beta * kd_s2) #args.gamma # * feat
+
+            total_loss_s1 += float(loss_s1.item())
+            total_ce_s1 += float(ce_s1.item())
+            total_kd_s1 += float(kd_s1.item())
+            # total_feat += float(feat.item())
+
+            total_loss_s2 += float(loss_s2.item())
+            total_ce_s2 += float(ce_s2.item())
+            total_kd_s2 += float(kd_s2.item())
+
+            pbar.set_description(
+                'Epoch: {}; Type: VAL; Loss_s1: {:.5f}'.format(
+                    epoch + 1, loss_s1
+                )
+            )
+            pbar.set_description(
+                'Epoch: {}; Type: VAL; Loss_s2: {:.5f}'.format(
+                    epoch + 1, loss_s2
+                )
+            )
+
 
     n = max(len(val_loader), 1)
-    return {
-        "loss": total_loss / n,
-        "ce": total_ce / n,
-        "kd": total_kd / n,
+    return[{
+        "loss": total_loss_s1 / n,
+        "ce": total_ce_s1 / n,
+        "kd": total_kd_s1 / n,
         # "feat": total_feat / n,
-    }
+    }, {
+        "loss": total_loss_s2 / n,
+        "ce": total_ce_s2 / n,
+        "kd": total_kd_s2 / n,
+        # "feat": total_feat / n,
+    }]
 
 
 # -----------------------------
