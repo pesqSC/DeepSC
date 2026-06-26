@@ -19,7 +19,7 @@ from student import Student
 from teacher import build_teacher
 from models.rx_model import Receiver
 from models.tx_model import Transmitter
-from utils import create_masks, loss_function, validate_one_epoch, save_student_receiver
+from utils import create_masks, loss_function, validate_multi_epoch, save_student_receiver
 from utils import kd_kl_loss, masked_ce_loss, feature_distillation_loss, SNR_to_noise
 
 
@@ -42,7 +42,7 @@ def parse_args():
 
     # train
     parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
     parser.add_argument("--grad-clip", type=float, default=1.0)
@@ -85,6 +85,29 @@ def snr_db_to_noise_std(snr_db: float) -> float:
     return 10 ** (-snr_db / 20.0)
 
 # def train_step():
+
+def validate(epoch, args, pad_idx, criterion, net):
+    test_eur = EurParallelDataset(args.en, 'test')
+    test_iterator = DataLoader(test_eur, batch_size=args.batch_size, num_workers=0,
+                                pin_memory=True, collate_fn=collate_parallel)
+    net.eval()
+    pbar = tqdm(test_iterator)
+    total = 0
+    with torch.no_grad():
+        for src, trg in pbar:
+            src = src.to(device)
+            trg = trg.to(device)
+            loss = val_step(net, src, trg, 0.1, pad_idx,
+                             criterion, args.channel)
+
+            total += loss
+            pbar.set_description(
+                'Epoch: {}; Type: VAL; Loss: {:.5f}'.format(
+                    epoch + 1, loss
+                )
+            )
+
+    return total/len(test_iterator)
 
 def train(
     transmitter: Transmitter, 
@@ -224,9 +247,17 @@ def train(
         total_kd_s2 += float(kd_s2.item())
         # pbar.set_description(f"Loss: {loss.item():.4f}")
     
+        # pbar.set_description(
+        #         'Epoch: {};  Type: Train; Loss_s1: {:.4f}\nLoss_s2: {:.4f}'
+        #         .format(epoch + 1, loss_s1.item(), loss_s2.item())
+        #     )
         pbar.set_description(
-                'Epoch: {};  Type: Train; Loss_s1: {:.4f}\nLoss_s2: {:.4f}'
-                .format(epoch + 1, loss_s1.item(), loss_s2.item())
+                'Epoch: {};  Type: Train; Loss_s1: {:.4f}'
+                .format(epoch + 1, loss_s1.item())
+            )
+        pbar.set_description(
+                'Epoch: {};  Type: Train; Loss_s2: {:.4f}'
+                .format(epoch + 1, loss_s2.item())
             )
 
     n = len(train_loader)
@@ -404,10 +435,10 @@ def main():
             args=args
         )
 
-        s1_val_stats = validate_one_epoch(
+        val_stats = validate_multi_epoch(
             transmitter=transmitter, 
             teacher=receiver, 
-            student=students[0], 
+            students=students, 
             val_loader=val_loader, 
             pad_idx=pad_idx,
             device=device,
@@ -417,21 +448,21 @@ def main():
             args=args
         )
 
-        s2_val_stats = validate_one_epoch(
-            transmitter=transmitter, 
-            teacher=receiver, 
-            student=students[1], 
-            val_loader=val_loader, 
-            pad_idx=pad_idx,
-            device=device,
-            channel=args.channel,
-            noise_std=noise_std,
-            criterion=criterion,
-            args=args
-        )
+        # s2_val_stats = validate_one_epoch(
+        #     transmitter=transmitter, 
+        #     teacher=receiver, 
+        #     student=students[1], 
+        #     val_loader=val_loader, 
+        #     pad_idx=pad_idx,
+        #     device=device,
+        #     channel=args.channel,
+        #     noise_std=noise_std,
+        #     criterion=criterion,
+        #     args=args
+        # )
 
         elapsed = time.time() - start_time
-        val_stats = [s1_val_stats, s2_val_stats]
+        # val_stats = [s1_val_stats, s2_val_stats]
 
         # for i in range(len(students)):
         #     print(
