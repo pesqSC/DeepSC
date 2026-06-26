@@ -178,7 +178,7 @@ def main():
 
     optimizer = torch.optim.Adam(lora_parameters(student), lr=args.lr)
     
-    os.makedirs(args.save_dir, exist_ok=True)
+    os.makedirs(args.save_lora, exist_ok=True)
     
     pbar = tqdm(range(args.epochs))
     for epoch in pbar:
