@@ -134,9 +134,10 @@ class NoamOpt:
 
             
 class SeqtoText:
-    def __init__(self, vocb_dictionary, end_idx):
+    def __init__(self, vocb_dictionary, end_idx, skip_tokens=None):
         self.reverse_word_map = dict(zip(vocb_dictionary.values(), vocb_dictionary.keys()))
         self.end_idx = end_idx
+        self.skip_tokens = set(skip_tokens or ("<PAD>", "<START>", "<EN>", "<PT>", "<ES>", "<FR>"))
         
     def sequence_to_text(self, list_of_indices):
         # Looking up words in dictionary
@@ -144,8 +145,9 @@ class SeqtoText:
         for idx in list_of_indices:
             if idx == self.end_idx:
                 break
-            else:
-                words.append(self.reverse_word_map.get(idx))
+            word = self.reverse_word_map.get(idx)
+            if word is not None and word not in self.skip_tokens:
+                words.append(word)
         words = ' '.join(words)
         return(words) 
 
@@ -522,16 +524,96 @@ def masked_ce_loss(
     targets: torch.Tensor,
     pad_idx: int,
 ) -> torch.Tensor:
-    # logits: [B,T,V], targets: [B,T]
+    """
+    Token-level cross-entropy averaged over non-PAD positions.
+
+    logits:  [B, T, V]
+    targets: [B, T]
+    """
+
+    if logits.ndim != 3:
+        raise ValueError(
+            f"Expected logits with shape [B,T,V], got {logits.shape}"
+        )
+
+    if targets.ndim != 2:
+        raise ValueError(
+            f"Expected targets with shape [B,T], got {targets.shape}"
+        )
+
+    if logits.shape[:2] != targets.shape:
+        raise ValueError(
+            f"Shape mismatch: logits={logits.shape}, targets={targets.shape}"
+        )
+
     vocab_size = logits.size(-1)
-    loss = F.cross_entropy(
+
+    flat_targets = targets.reshape(-1)
+
+    token_loss = F.cross_entropy(
         logits.reshape(-1, vocab_size),
-        targets.reshape(-1),
+        flat_targets,
         reduction="none",
         ignore_index=pad_idx,
     )
-    valid = (targets.reshape(-1) != pad_idx).float()
-    return (loss * valid).sum() / valid.sum().clamp_min(1.0)
+
+    valid = (flat_targets != pad_idx).to(token_loss.dtype)
+
+    return (token_loss * valid).sum() / valid.sum().clamp_min(1.0)
+
+def masked_ce_loss2(
+    student_logits: torch.Tensor,
+    targets: torch.Tensor,
+    pad_idx: int,
+) -> torch.Tensor:
+    """
+    Cross-entropy loss that ignores PAD tokens.
+
+    Args:
+        student_logits:
+            Model predictions with shape [batch_size, sequence_length, vocab_size].
+
+        targets:
+            Correct token IDs with shape [batch_size, sequence_length].
+
+        pad_idx:
+            Vocabulary index of the <PAD> token.
+
+    Returns:
+        Scalar cross-entropy loss averaged over non-PAD tokens.
+    """
+
+    # student_logits: [B, T, V]
+    # targets:        [B, T]
+
+    if student_logits.shape[:2] != targets.shape:
+        raise ValueError(
+            f"Shape mismatch: logits have sequence shape "
+            f"{student_logits.shape[:2]}, but targets have shape {targets.shape}"
+        )
+
+    batch_size, sequence_length, vocab_size = student_logits.shape
+
+    # CrossEntropyLoss expects:
+    # predictions: [N, V]
+    # targets:     [N]
+    logits_flat = student_logits.reshape(
+        batch_size * sequence_length,
+        vocab_size
+    )
+
+    targets_flat = targets.reshape(
+        batch_size * sequence_length
+    )
+
+    loss = F.cross_entropy(
+        logits_flat,
+        targets_flat,
+        ignore_index=pad_idx,
+        reduction="mean",
+    )
+
+    return loss
 
 def kd_kl_loss(
     student_logits: torch.Tensor,
@@ -540,6 +622,13 @@ def kd_kl_loss(
     pad_idx: int,
     temperature: float,
 ) -> torch.Tensor:
+
+    min_len = min(student_logits.size(1), teacher_logits.size(1), targets.size(1))
+
+    student_logits = student_logits[:, :min_len, :]
+    teacher_logits = teacher_logits[:, :min_len, :]
+    targets = targets[:, :min_len]
+
     # apply mask so PAD tokens don't dominate KD
     s_log_prob = F.log_softmax(student_logits / temperature, dim=-1)
     t_prob = F.softmax(teacher_logits / temperature, dim=-1)
