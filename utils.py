@@ -510,10 +510,10 @@ def validate_multi_epoch(
 
             pbar.set_postfix(
                 L1=f"{loss_s1.item():.3f}",
-                CE1=f"{s1_ce.item():.3f}",
+                CE1=f"{ce_s1.item():.3f}",
                 KD1=f"{kd_s1.item():.3f}",
                 L2=f"{loss_s2.item():.3f}",
-                CE2=f"{s2_ce.item():.3f}",
+                CE2=f"{ce_s2.item():.3f}",
                 KD2=f"{kd_s2.item():.3f}",
             )
 
