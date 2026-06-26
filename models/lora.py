@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import os
 
 class LoRALinear(nn.Module):
     def __init__(self, base_layer, r=8, alpha=16, dropout=0.05):
