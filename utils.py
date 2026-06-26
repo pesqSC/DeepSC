@@ -403,6 +403,7 @@ def greedy_decode(model, src, n_var, max_len, padding_idx, start_symbol, channel
 
 @torch.no_grad()
 def validate_multi_epoch(
+    epoch,
     transmitter,
     teacher: Receiver,
     students: [Student],
