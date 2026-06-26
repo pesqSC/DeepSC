@@ -66,7 +66,7 @@ def lora_parameters(model):
 
 def save_lora(epoch, model, path, len):
     path = os.path.join(
-                args.save_dir,
+                path,
                 f"student_lora{len}_{epoch+1:02d}.pth"
             )
 
