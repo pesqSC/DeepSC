@@ -1,75 +1,131 @@
-# check_pkl_dataset.py
-import pickle
-import json
-from pathlib import Path
-
-PKL_PATH = "data/train/europarl/train_en_en.pkl"
-VOCAB_PATH = "data/train/europarl/vocab_multilingual.json"
-
-def datasetValidator(plk_path, vocab_path, index):
-    with open(vocab_path, "r", encoding="utf-8") as f:
-        vocab = json.load(f)
-
-    token_to_idx = vocab["token_to_idx"]
-    idx_to_token = {int(v): k for k, v in token_to_idx.items()}
-
-    pad_idx = token_to_idx["<PAD>"]
-    start_idx = token_to_idx["<START>"]
-    end_idx = token_to_idx["<END>"]
-    en_idx = token_to_idx["<EN>"]
-
-    with open(plk_path, "rb") as f:
-        data = pickle.load(f)
-
-    print("Total samples:", len(data))
-    print("Type:", type(data))
-    print("First item type:", type(data[index]))
-    print("First item length:", len(data[index]))
-
-    src, trg = data[index]
-
-    print("\nSRC ids:", src[:34])
-    print("TRG ids:", trg[:34])
-
-    def decode(ids):
-        return " ".join(idx_to_token.get(int(i), "<MISSING>") for i in ids)
-
-    print("\nSRC text:")
-    print(decode(src))
-
-    print("\nTRG text:")
-    print(decode(trg))
-
-    # Basic checks
-    errors = 0
-
-    for i, item in enumerate(data[:1000]):
-        if not isinstance(item, (tuple, list)) or len(item) != 2:
-            print("Bad item format at:", i)
-            errors += 1
-            continue
-
-        src, trg = item
-
-        if src[0] != start_idx or trg[0] != start_idx:
-            print("Missing <START> at:", i)
-            errors += 1
-
-        if src[-1] != end_idx or trg[-1] != end_idx:
-            print("Missing <END> at:", i)
-            errors += 1
-
-        if src[1] != en_idx or trg[1] != en_idx:
-            print("Missing <EN> at:", i)
-            errors += 1
-
-        if max(src) >= len(token_to_idx) or max(trg) >= len(token_to_idx):
-            print("Token id outside vocab at:", i)
-            errors += 1
-
-    print("\nErrors found:", errors)
-
-    if errors == 0:
-        print("✅ Dataset looks correct.")
-    else:
-        print("❌ Dataset has problems.")
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "bad3d151",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Total samples: 93274\n",
+      "Type: <class 'list'>\n",
+      "First item type: <class 'tuple'>\n",
+      "First item length: 2\n",
+      "\n",
+      "SRC ids: [1, 4, 2447, 15, 11, 294, 2]\n",
+      "TRG ids: [1, 4, 2447, 15, 11, 294, 2]\n",
+      "\n",
+      "SRC text:\n",
+      "<START> <EN> resumption of the session <END>\n",
+      "\n",
+      "TRG text:\n",
+      "<START> <EN> resumption of the session <END>\n",
+      "\n",
+      "Errors found: 0\n",
+      "✅ Dataset looks correct.\n"
+     ]
+    }
+   ],
+   "source": [
+    "# check_pkl_dataset.py\n",
+    "import pickle\n",
+    "import json\n",
+    "from pathlib import Path\n",
+    "\n",
+    "PKL_PATH = \"data/train/europarl/train_en_en.pkl\"\n",
+    "VOCAB_PATH = \"data/train/europarl/vocab_multilingual.json\"\n",
+    "\n",
+    "with open(VOCAB_PATH, \"r\", encoding=\"utf-8\") as f:\n",
+    "    vocab = json.load(f)\n",
+    "\n",
+    "token_to_idx = vocab[\"token_to_idx\"]\n",
+    "idx_to_token = {int(v): k for k, v in token_to_idx.items()}\n",
+    "\n",
+    "pad_idx = token_to_idx[\"<PAD>\"]\n",
+    "start_idx = token_to_idx[\"<START>\"]\n",
+    "end_idx = token_to_idx[\"<END>\"]\n",
+    "en_idx = token_to_idx[\"<EN>\"]\n",
+    "\n",
+    "with open(PKL_PATH, \"rb\") as f:\n",
+    "    data = pickle.load(f)\n",
+    "\n",
+    "print(\"Total samples:\", len(data))\n",
+    "print(\"Type:\", type(data))\n",
+    "print(\"First item type:\", type(data[0]))\n",
+    "print(\"First item length:\", len(data[0]))\n",
+    "\n",
+    "src, trg = data[0]\n",
+    "\n",
+    "print(\"\\nSRC ids:\", src[:20])\n",
+    "print(\"TRG ids:\", trg[:20])\n",
+    "\n",
+    "def decode(ids):\n",
+    "    return \" \".join(idx_to_token.get(int(i), \"<MISSING>\") for i in ids)\n",
+    "\n",
+    "print(\"\\nSRC text:\")\n",
+    "print(decode(src))\n",
+    "\n",
+    "print(\"\\nTRG text:\")\n",
+    "print(decode(trg))\n",
+    "\n",
+    "# Basic checks\n",
+    "errors = 0\n",
+    "\n",
+    "for i, item in enumerate(data[:1000]):\n",
+    "    if not isinstance(item, (tuple, list)) or len(item) != 2:\n",
+    "        print(\"Bad item format at:\", i)\n",
+    "        errors += 1\n",
+    "        continue\n",
+    "\n",
+    "    src, trg = item\n",
+    "\n",
+    "    if src[0] != start_idx or trg[0] != start_idx:\n",
+    "        print(\"Missing <START> at:\", i)\n",
+    "        errors += 1\n",
+    "\n",
+    "    if src[-1] != end_idx or trg[-1] != end_idx:\n",
+    "        print(\"Missing <END> at:\", i)\n",
+    "        errors += 1\n",
+    "\n",
+    "    if src[1] != en_idx or trg[1] != en_idx:\n",
+    "        print(\"Missing <EN> at:\", i)\n",
+    "        errors += 1\n",
+    "\n",
+    "    if max(src) >= len(token_to_idx) or max(trg) >= len(token_to_idx):\n",
+    "        print(\"Token id outside vocab at:\", i)\n",
+    "        errors += 1\n",
+    "\n",
+    "print(\"\\nErrors found:\", errors)\n",
+    "\n",
+    "if errors == 0:\n",
+    "    print(\"✅ Dataset looks correct.\")\n",
+    "else:\n",
+    "    print(\"❌ Dataset has problems.\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": ".venv",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.12.13"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
