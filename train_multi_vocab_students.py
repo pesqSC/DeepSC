@@ -269,7 +269,7 @@ def main():
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
-        collate_fn=collate_data,
+        collate_fn=collate_parallel,
     )
     val_loader = DataLoader(
         test_set,
@@ -277,7 +277,7 @@ def main():
         shuffle=False,
         num_workers=args.num_workers,
         pin_memory=True,
-        collate_fn=collate_data,
+        collate_fn=collate_parallel,
     )
 
 
