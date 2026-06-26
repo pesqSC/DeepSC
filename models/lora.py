@@ -63,7 +63,12 @@ def lora_parameters(model):
     return [p for n, p in model.named_parameters() if "lora_" in n]
 
 
-def save_lora(model, path):
+def save_lora(epoch, model, path, len):
+    path = os.path.join(
+                args.save_dir,
+                f"student_lora{len}_{epoch+1:02d}.pth"
+            )
+
     torch.save(
         {k: v.cpu() for k, v in model.state_dict().items() if "lora_" in k},
         path
