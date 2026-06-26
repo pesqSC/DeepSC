@@ -82,7 +82,7 @@ def main():
 
     parser.add_argument("--channel", default="Rayleigh", type=str, choices=["AWGN", "Rayleigh", "Rician"])
     parser.add_argument("--snr", default=12, type=float)
-    parser.add_argument("--epochs", default=10, type=int)
+    parser.add_argument("--epochs", default=100, type=int)
     parser.add_argument("--batch-size", default=256, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
 
