@@ -441,7 +441,7 @@ def validate_multi_epoch(
             trg_inp = trg[:, :-1]
             trg_real = trg[:, 1:]
 
-            src_mask, look_ahead_mask = create_masks(sents, trg_inp, pad_idx)
+            src_mask, look_ahead_mask = create_masks(src, trg_inp, pad_idx)
 
             tx_en_out, tx_ch_en_out, Tx_sig, z_noisy = transmitter(
                 src, 
@@ -505,15 +505,15 @@ def validate_multi_epoch(
             total_ce_s2 += float(ce_s2.item())
             total_kd_s2 += float(kd_s2.item())
 
-            pbar.set_description(
-                'Epoch: {}; Type: VAL; Loss_s1: {:.5f}'.format(
-                    epoch + 1, loss_s1
-                )
-            )
-            pbar.set_description(
-                'Epoch: {}; Type: VAL; Loss_s2: {:.5f}'.format(
-                    epoch + 1, loss_s2
-                )
+            pbar.set_description(f"Epoch {epoch + 1} Valid")
+
+            pbar.set_postfix(
+                L1=f"{loss_s1.item():.3f}",
+                CE1=f"{s1_ce.item():.3f}",
+                KD1=f"{kd_s1.item():.3f}",
+                L2=f"{loss_s2.item():.3f}",
+                CE2=f"{s2_ce.item():.3f}",
+                KD2=f"{kd_s2.item():.3f}",
             )
 
 
