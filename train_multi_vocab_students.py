@@ -236,9 +236,10 @@ def train(
 
 
         feat_s1 = feature_distillation_loss(
-            s1_rx_ch,
-            t_rx_ch.detach(),
-            src_valid
+            student_feat=s1_rx_ch,
+            teacher_feat=t_rx_ch.detach(),
+            targets=src,
+            pad_idx=pad_idx,
         )
 
         # feat = masked_ce_loss(s_ch_dec_out, rx_ch_dec_out.detach(), pad_idx)
