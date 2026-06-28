@@ -156,8 +156,8 @@ def train(
     total_ce_s2 = 0.0
     total_kd_s2 = 0.0
 
-    total_feat_s1
-    
+    total_feat_s1=0.0
+
     pbar = tqdm(train_loader)
 
     for src, trg in pbar:
