@@ -460,7 +460,6 @@ def main():
             pad_idx=pad_idx,
             device=device,
             channel=args.channel,
-            noise_std=noise_std,
             criterion=criterion,
             epoch=epoch,
             args=args
