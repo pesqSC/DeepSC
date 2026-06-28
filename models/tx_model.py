@@ -18,7 +18,12 @@ class Transmitter(nn.Module):
         self.encoder = encoder # encoder model
         self.channel_encoder = channel_encoder # channel encoder model
 
-    def forward(self, src: torch.Tensor, src_mask: torch.Tensor, channel_type: str, noise_std: float) -> torch.Tensor:
+    def forward(self, 
+        src: torch.Tensor, 
+        src_mask: torch.Tensor, 
+        channel_type: str, 
+        noise_std: float
+    ) -> torch.Tensor:
         """
         Forward pass through the transmitter model.
         
