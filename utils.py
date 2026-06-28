@@ -466,56 +466,68 @@ def validate_multi_epoch(
                 src_mask
             )
 
-            s2_logits, s2_ch_dec_out, s2_dec_out = student_2(
-                z_noisy, 
-                trg_inp, 
-                look_ahead_mask, 
-                src_mask
+            # s2_logits, s2_ch_dec_out, s2_dec_out = student_2(
+            #     z_noisy, 
+            #     trg_inp, 
+            #     look_ahead_mask, 
+            #     src_mask
+            # )
+            s1_ce = masked_ce_loss(
+                s1_logits,
+                trg_real,
+                pad_idx
             )
             
 
             # ce = masked_ce_loss(s_logits, trg_real, pad_idx)
-            ce_s1 = loss_function(
-                s1_logits.contiguous().view(-1, s1_logits.size(-1)),
-                trg_real.contiguous().view(-1), 
-                pad_idx, 
-                criterion
-            )
+            # ce_s1 = loss_function(
+            #     s1_logits.contiguous().view(-1, s1_logits.size(-1)),
+            #     trg_real.contiguous().view(-1), 
+            #     pad_idx, 
+            #     criterion
+            # )
 
-            ce_s2 = loss_function(
-                s2_logits.contiguous().view(-1, s2_logits.size(-1)),
-                trg_real.contiguous().view(-1), 
-                pad_idx, 
-                criterion
-            )
+            # ce_s2 = loss_function(
+            #     s2_logits.contiguous().view(-1, s2_logits.size(-1)),
+            #     trg_real.contiguous().view(-1), 
+            #     pad_idx, 
+            #     criterion
+            # )
 
 
             kd_s1 = kd_kl_loss(s1_logits, t_logits, trg_real, pad_idx, args.temperature)
-            kd_s2 = kd_kl_loss(s2_logits, t_logits, trg_real, pad_idx, args.temperature)
-            
-            # feat = masked_mse_loss(s_ch_dec_out, rx_ch_dec_out.detach(), trg_real, pad_idx)
+            # kd_s2 = kd_kl_loss(s2_logits, t_logits, trg_real, pad_idx, args.temperature)
 
-            loss_s1 = (args.alpha * ce_s1) + (args.beta * kd_s1) #args.gamma # * feat
-            loss_s2 = (args.alpha * ce_s2) + (args.beta * kd_s2) #args.gamma # * feat
+            src_valid = (src != pad_idx).float()
+
+            feat = feature_distillation_loss(
+                student_feat=s1_ch_dec_out, 
+                teacher_feat=rx_ch_dec_out.detach(), 
+                targets=src,
+                pad_idx=pad_idx,
+            )
+
+            loss_s1 = (args.alpha * s1_ce) + (args.beta * kd_s1) + args.gamma * feat
+            # loss_s2 = (args.alpha * ce_s2) + (args.beta * kd_s2) #args.gamma # * feat
 
             total_loss_s1 += float(loss_s1.item())
-            total_ce_s1 += float(ce_s1.item())
-            total_kd_s1 += float(kd_s1.item())
+            total_ce_s1 += float(args.alpha * s1_ce.item())
+            total_kd_s1 += float(args.beta * kd_s1.item())
             # total_feat += float(feat.item())
 
-            total_loss_s2 += float(loss_s2.item())
-            total_ce_s2 += float(ce_s2.item())
-            total_kd_s2 += float(kd_s2.item())
+            # total_loss_s2 += float(loss_s2.item())
+            # total_ce_s2 += float(ce_s2.item())
+            # total_kd_s2 += float(kd_s2.item())
 
             pbar.set_description(f"Epoch {epoch + 1} Valid")
 
             pbar.set_postfix(
                 L1=f"{loss_s1.item():.3f}",
-                CE1=f"{ce_s1.item():.3f}",
+                CE1=f"{s1_ce.item():.3f}",
                 KD1=f"{kd_s1.item():.3f}",
-                L2=f"{loss_s2.item():.3f}",
-                CE2=f"{ce_s2.item():.3f}",
-                KD2=f"{kd_s2.item():.3f}",
+                # L2=f"{loss_s2.item():.3f}",
+                # CE2=f"{ce_s2.item():.3f}",
+                # KD2=f"{kd_s2.item():.3f}",
             )
 
 
