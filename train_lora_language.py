@@ -2,16 +2,95 @@ import argparse
 import json
 import torch
 import os
+import time
+import numpy as np
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset_multilingual import EurParallelDataset, collate_parallel
 from models.transceiver import DeepSC
 from models.lora import apply_lora_to_decoder, lora_parameters, save_lora
-from utils import SNR_to_noise, create_masks, setup_seed
 from student import Student
 from models.tx_model import Transmitter
+from utils import (
+    SNR_to_noise, 
+    create_masks, 
+    setup_seed, 
+    validate_multi_epoch,
+    loss_function,
+    Channels,
+    save_epoch_results
+)
 
+def val_step(transmitter, LoRA, src, trg, n_var, pad, criterion, channel, noise_std):
+    channels = Channels()
+    trg_inp = trg[:, :-1]
+    trg_real = trg[:, 1:]
+
+    src_mask, look_ahead_mask = create_masks(src, trg_inp, pad)
+    tx_en_out, tx_ch_en_out, Tx_sig, z_noisy = transmitter(
+        src, 
+        src_mask, 
+        channel, 
+        noise_std
+    )
+
+    logits, rx_ch, dec_out = LoRA(
+        z_noisy, 
+        trg_inp, 
+        look_ahead_mask, 
+        src_mask
+    )
+
+    # pred = model(src, trg_inp, src_mask, look_ahead_mask, n_var)
+    ntokens = logits.size(-1)
+    loss = loss_function(logits.contiguous().view(-1, ntokens), 
+                         trg_real.contiguous().view(-1), 
+                         pad, criterion)
+    # loss = loss_function(pred, trg_real, pad)
+    
+    return loss.item()
+
+def validate(
+    epoch, 
+    args, 
+    transmitter, 
+    LoRA, 
+    criterion, 
+    device, 
+    pad_idx,
+    noise_std,
+    train_lag
+):
+    test_eur = EurParallelDataset(train_lag, 'test')
+    test_iterator = DataLoader(
+                        test_eur, 
+                        batch_size=args.batch_size, 
+                        num_workers=0,
+                        pin_memory=True, 
+                        collate_fn=collate_parallel
+                    )
+    transmitter.eval()
+    LoRA.eval()
+
+    pbar = tqdm(test_iterator)
+    
+    total = 0.0
+    
+    with torch.no_grad():
+        for src, trg in pbar:
+            sents = sents.to(device)
+            loss = val_step(transmitter,LoRA, src, trg, 0.1, pad_idx,
+                             criterion, args.channel,noise_std)
+
+            total += loss.item()
+            pbar.set_description(
+                'Epoch: {}; Type: VAL; Loss: {:.5f}'.format(
+                    epoch + 1, loss
+                )
+            )
+
+    return total/len(test_iterator)
 
 def train_lora_epoch(epoch, transmitter, LoraModel, loader, optimizer, device, pad_idx, channel="AWGN", snr=12):
     LoraModel.train()
@@ -179,8 +258,18 @@ def main():
     optimizer = torch.optim.Adam(lora_parameters(student), lr=args.lr)
     
     os.makedirs(args.save_lora, exist_ok=True)
+
+    noise_std = np.random.uniform(
+        SNR_to_noise(args.snr_db_low), 
+        SNR_to_noise(args.snr_db_high), 
+        # size=(1)
+    )
+    criterion = torch.nn.CrossEntropyLoss(reduction = 'none')
     
     pbar = tqdm(range(args.epochs))
+
+    best_val_loss = float('inf')
+    
     for epoch in pbar:
         model, loss = train_lora_epoch(
             epoch,
@@ -194,10 +283,33 @@ def main():
             args.snr
         )
 
-        pbar.set_description(f"Epoch {epoch + 1}/{args.epochs} | LoRA loss: {loss:.4f}")
+        val_loss = validate(
+            epoch,
+            args,
+            transmitter,
+            LoRA,
+            criterion,
+            device,
+            pad_idx,
+            noise_std,
+            train_lag
+        )
 
-        save_lora(epoch, model, args.save_lora, train_lag)
-        print(f"Saved LoRA adapter to {args.save_lora}")
+        save_epoch_results(
+            os.path.join(args.save_lora, 'results.csv'),
+            epoch,
+            {
+                'loss': loss,
+                'val_loss': val_loss
+            }
+        )
+
+        if val_loss < best_val_loss:
+            
+            best_val_loss = val_loss
+
+            save_lora(epoch, model, args.save_lora, train_lag)
+            print(f"Saved LoRA adapter to {args.save_lora}")
 
 
 if __name__ == "__main__":
