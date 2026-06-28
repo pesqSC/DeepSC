@@ -92,7 +92,7 @@ def snr_db_to_noise_std(snr_db: float) -> float:
 
 # def train_step():
 
-def validate(epoch, args, pad_idx, criterion, net):
+def validate(epoch, args, pad_idx, criterion, net, device):
     test_eur = EurParallelDataset(args.en, 'test')
     test_iterator = DataLoader(test_eur, batch_size=args.batch_size, num_workers=0,
                                 pin_memory=True, collate_fn=collate_parallel)
@@ -542,6 +542,9 @@ def main():
                 },
             )
 
+            
+            if i == 1:
+                return
             if val_stats[i]["loss"] < best_val[i]:
                 best_val[i] = val_stats[i]["loss"]
 
