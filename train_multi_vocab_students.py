@@ -25,7 +25,8 @@ from utils import (
     masked_ce_loss, 
     feature_distillation_loss, 
     SNR_to_noise, 
-    masked_ce_loss2
+    masked_ce_loss2,
+    save_epoch_results
 )
 
 
@@ -129,6 +130,8 @@ def train(
     args
     ):
     
+    csv_path = "results/train_multi_students_results.csv"
+
     for p in teacher.parameters():
         p.requires_grad = False
     
@@ -270,7 +273,7 @@ def train(
         total_loss_s1 += float(loss_s1.item())
         total_ce_s1 += float(s1_ce.item())
         total_kd_s1 += float(kd_s1.item())
-        # total_feat += float(feat.item())
+        total_feat += float(feat_s1.item())
         
         # total_loss_s2 += float(loss_s2.item())
         # total_ce_s2 += float(s2_ce.item())
@@ -281,24 +284,46 @@ def train(
         #         'Epoch: {};  Type: Train; Loss_s1: {:.4f}\nLoss_s2: {:.4f}'
         #         .format(epoch + 1, loss_s1.item(), loss_s2.item())
         #     )
+        num_batches += 1
+
         pbar.set_description(f"Epoch {epoch + 1} Train")
 
         pbar.set_postfix(
             L1=f"{loss_s1.item():.3f}",
             CE1=f"{s1_ce.item():.3f}",
             KD1=f"{kd_s1.item():.3f}",
+            TF=f"{feat_s1.item():.3f}"
             # L2=f"{loss_s2.item():.3f}",
             # CE2=f"{s2_ce.item():.3f}",
             # KD2=f"{kd_s2.item():.3f}",
         )
 
     n = len(train_loader)
+
+    epoch_metrics = {
+        "train_s1_loss": total_loss_s1 / max(num_batches, 1),
+        "train_s1_ce": total_ce_s1 / max(num_batches, 1),
+        "train_s1_kd": total_kd_s1 / max(num_batches, 1),
+        "train_s1_feature": total_feat / max(num_batches, 1),
+
+        "alpha": args.alpha,
+        "beta": args.beta,
+        "gamma": args.gamma,
+        "temperature": args.temperature,
+    }
+
+    save_epoch_results(
+        csv_path=csv_path,
+        epoch=epoch + 1,
+        metrics=epoch_metrics,
+    )
+
     return [
         {
             "loss": total_loss_s1 / n,
             "ce": total_ce_s1 / n,
             "kd": total_kd_s1 / n,
-            # "feat": total_feat / n
+            "feat": total_feat / n
         },
         # {
         #     "loss": total_loss_s2 / n,

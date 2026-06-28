@@ -6,6 +6,7 @@ Created on Mon Jun  1 09:47:54 2020
 utils.py
 """
 import os 
+import csv
 import math
 import torch
 import time
@@ -707,3 +708,34 @@ def setup_seed(seed: int) -> None:
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+def save_epoch_results(csv_path, epoch, metrics):
+    """
+    Save one epoch of training results to a CSV file.
+
+    Args:
+        csv_path: Output CSV path.
+        epoch: Current epoch number.
+        metrics: Dictionary containing metric names and values.
+    """
+
+    os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
+
+    row = {
+        "epoch": epoch,
+        **metrics,
+    }
+
+    file_exists = os.path.isfile(csv_path)
+
+    with open(csv_path, mode="a", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(
+            file,
+            fieldnames=row.keys(),
+        )
+
+        if not file_exists:
+            writer.writeheader()
+
+        writer.writerow(row)
