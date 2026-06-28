@@ -150,6 +150,7 @@ def train(
     total_loss_s1 = 0.0
     total_ce_s1 = 0.0
     total_kd_s1 = 0.0
+    total_feat_s1 = 0.0
 
     total_loss_s2 = 0.0
     total_ce_s2 = 0.0
@@ -273,7 +274,7 @@ def train(
         total_loss_s1 += float(loss_s1.item())
         total_ce_s1 += float(s1_ce.item())
         total_kd_s1 += float(kd_s1.item())
-        total_feat += float(feat_s1.item())
+        total_feat_s1 += float(feat_s1.item())
         
         # total_loss_s2 += float(loss_s2.item())
         # total_ce_s2 += float(s2_ce.item())
@@ -304,7 +305,7 @@ def train(
         "train_s1_loss": total_loss_s1 / max(num_batches, 1),
         "train_s1_ce": total_ce_s1 / max(num_batches, 1),
         "train_s1_kd": total_kd_s1 / max(num_batches, 1),
-        "train_s1_feature": total_feat / max(num_batches, 1),
+        "train_s1_feature": total_feat_s1 / max(num_batches, 1),
 
         "alpha": args.alpha,
         "beta": args.beta,
@@ -323,7 +324,7 @@ def train(
             "loss": total_loss_s1 / n,
             "ce": total_ce_s1 / n,
             "kd": total_kd_s1 / n,
-            "feat": total_feat / n
+            "feat": total_feat_s1 / n
         },
         # {
         #     "loss": total_loss_s2 / n,
