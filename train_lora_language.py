@@ -161,6 +161,11 @@ def main():
 
     parser.add_argument("--channel", default="Rayleigh", type=str, choices=["AWGN", "Rayleigh", "Rician"])
     parser.add_argument("--snr", default=12, type=float)
+    parser.add_argument("--snr-db", type=float, default=8.0)
+    parser.add_argument("--snr-db-low", type=float, default=5.0)
+    parser.add_argument("--snr-db-high", type=float, default=10.0)
+    parser.add_argument("--val-snr-db", type=float, default=8.0)
+
     parser.add_argument("--epochs", default=100, type=int)
     parser.add_argument("--batch-size", default=256, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
