@@ -93,7 +93,18 @@ def validate(
 
     return total/len(test_iterator)
 
-def train_lora_epoch(epoch, transmitter, LoraModel, loader, optimizer, device, pad_idx, channel="AWGN", snr=12):
+def train_lora_epoch(
+    epoch, 
+    transmitter, 
+    LoraModel, 
+    loader, 
+    optimizer, 
+    device, 
+    pad_idx,
+    criterion,
+    channel="AWGN", 
+    snr=12
+):
     LoraModel.train()
     total_loss = 0
 
@@ -135,12 +146,16 @@ def train_lora_epoch(epoch, transmitter, LoraModel, loader, optimizer, device, p
         #     noise_std,
         #     channel
         # )
+        ntokens = l1_logits.size(-1)
 
-        loss = torch.nn.functional.cross_entropy(
-            l1_logits.reshape(-1, l1_logits.size(-1)),
-            trg_real.reshape(-1),
-            ignore_index=pad_idx
-        )
+        loss = loss_function(l1_logits.contiguous().view(-1, ntokens), 
+                         trg_real.contiguous().view(-1), 
+                         pad_idx, criterion)
+        # loss = torch.nn.functional.cross_entropy(
+        #     l1_logits.reshape(-1, l1_logits.size(-1)),
+        #     trg_real.reshape(-1),
+        #     ignore_index=pad_idx
+        # )
 
         loss.backward()
         optimizer.step()
@@ -167,7 +182,7 @@ def main():
     parser.add_argument("--snr-db-high", type=float, default=10.0)
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
-    parser.add_argument("--epochs", default=100, type=int)
+    parser.add_argument("--epochs", default=200, type=int)
     parser.add_argument("--batch-size", default=256, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
 
@@ -257,19 +272,15 @@ def main():
     # deepsc.channel_decoder.load_state_dict(dec_checkpoint['channel_decoder'])
     # deepsc.decoder.load_state_dict(dec_checkpoint['decoder'])
     # deepsc.dense.load_state_dict(dec_checkpoint['dense'])
+    r=8
+    alpha=16
 
-
-    LoRA = apply_lora_to_decoder(student, r=8, alpha=16, dropout=0.05).to(device)
+    LoRA = apply_lora_to_decoder(student, r=r, alpha=alpha, dropout=0.05).to(device)
 
     optimizer = torch.optim.Adam(lora_parameters(student), lr=args.lr)
     
     os.makedirs(args.save_lora, exist_ok=True)
 
-    noise_std = np.random.uniform(
-        SNR_to_noise(args.snr_db_low), 
-        SNR_to_noise(args.snr_db_high), 
-        # size=(1)
-    )
     criterion = torch.nn.CrossEntropyLoss(reduction = 'none')
     
     pbar = tqdm(range(args.epochs))
@@ -277,6 +288,13 @@ def main():
     best_val_loss = float('inf')
     
     for epoch in pbar:
+
+        noise_std = np.random.uniform(
+            SNR_to_noise(args.snr_db_low), 
+            SNR_to_noise(args.snr_db_high), 
+            # size=(1)
+        )
+
         model, loss = train_lora_epoch(
             epoch,
             transmitter,
@@ -285,8 +303,9 @@ def main():
             optimizer,
             device,
             pad_idx,
+            criterion,
             args.channel,
-            args.snr
+            noise_std
         )
 
         val_loss = validate(
@@ -314,7 +333,7 @@ def main():
             
             best_val_loss = val_loss
 
-            save_lora(epoch, model, args.save_lora, train_lag)
+            save_lora(epoch, model, args.save_lora, f'{train_lag}_r{r}')
             print(f"Saved LoRA adapter to {args.save_lora}")
 
 
