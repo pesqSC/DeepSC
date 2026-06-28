@@ -84,7 +84,7 @@ def validate(
             loss = val_step(transmitter,LoRA, src, trg, 0.1, pad_idx,
                              criterion, args.channel,noise_std)
 
-            total += loss.item()
+            total += loss
             pbar.set_description(
                 'Epoch: {}; Type: VAL; Loss: {:.5f}'.format(
                     epoch + 1, loss
