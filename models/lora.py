@@ -64,19 +64,73 @@ def lora_parameters(model):
     return [p for n, p in model.named_parameters() if "lora_" in n]
 
 
-def save_lora(epoch, model, path, len):
-    path = os.path.join(
-                path,
-                f"student_lora{len}_{epoch+1:02d}.pth"
-            )
+def save_lora(
+    epoch: int,
+    model: torch.nn.Module,
+    save_dir: str,
+    adapter_name: str,
+) -> str:
+    os.makedirs(save_dir, exist_ok=True)
 
-    torch.save(
-        {k: v.cpu() for k, v in model.state_dict().items() if "lora_" in k},
-        path
+    filename = f"student_lora_{adapter_name}_{epoch + 1:02d}.pth"
+    save_path = os.path.join(save_dir, filename)
+
+    lora_state = {
+        key: value.detach().cpu()
+        for key, value in model.state_dict().items()
+        if "lora_" in key
+    }
+
+    if not lora_state:
+        raise RuntimeError(
+            "No LoRA parameters were found in the model."
+        )
+
+    torch.save(lora_state, save_path)
+
+    print(
+        f"Saved {len(lora_state)} LoRA tensors to: {save_path}"
     )
+
+    return save_path
 
 
 def load_lora(model, path, device):
-    state = torch.load(path, map_location=device)
-    model.load_state_dict(state, strict=False)
+    state_dict = torch.load(
+        path,
+        map_location=device,
+    )
+
+    if not isinstance(state_dict, dict):
+        raise TypeError(
+            "The LoRA checkpoint must be a state dictionary."
+        )
+
+    lora_keys = [
+        key for key in state_dict
+        if "lora_" in key
+    ]
+
+    if not lora_keys:
+        raise RuntimeError(
+            f"No LoRA parameters found in checkpoint: {path}"
+        )
+
+    result = model.load_state_dict(
+        state_dict,
+        strict=False,
+    )
+
+    unexpected_lora_keys = [
+        key for key in result.unexpected_keys
+        if "lora_" in key
+    ]
+
+    if unexpected_lora_keys:
+        raise RuntimeError(
+            "These LoRA parameters did not match the model:\n"
+            + "\n".join(unexpected_lora_keys)
+        )
+
+    print(f"Loaded {len(lora_keys)} LoRA tensors.")
     return model
