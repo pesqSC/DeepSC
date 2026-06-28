@@ -235,9 +235,9 @@ def train(
         src_valid = (src != pad_idx).float()
 
 
-        feat_s1 = masked_mse_loss(
-            s1_rx,
-            t_rx.detach(),
+        feat_s1 = feature_distillation_loss(
+            s1_rx_ch,
+            t_rx_ch.detach(),
             src_valid
         )
 
@@ -252,7 +252,7 @@ def train(
         # feat = feature_distillation_loss(s_ch_dec_out, rx_ch_dec_out.detach(), trg_real, pad_idx)
 
         # loss = args.alpha * ce + args.beta * kd + args.gamma * feat
-        loss_s1 = (args.alpha * s1_ce) + (args.beta * kd_s1)
+        loss_s1 = (args.alpha * s1_ce) + (args.beta * kd_s1) + args.gamma * feat_s1
         # loss_s2 = (args.alpha * s2_ce) + (args.beta * kd_s2)
 
         loss_s1.backward()
