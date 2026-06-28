@@ -24,14 +24,28 @@ class LoRALinear(nn.Module):
         nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
         nn.init.zeros_(self.lora_B)
 
+    # def forward(self, x):
+    #     base_out = self.base(x)
+
+    #     lora_out = F.linear(
+    #         F.linear(self.dropout(x), self.lora_A),
+    #         self.lora_B
+    #     )
+
+    #     return base_out + self.scaling * lora_out
+
     def forward(self, x):
+        # 1. Get base model output
         base_out = self.base(x)
 
-        lora_out = F.linear(
-            F.linear(self.dropout(x), self.lora_A),
-            self.lora_B
-        )
+        # 2. Compute LoRA output using matrix multiplication (@)
+        # x shape: (batch, ..., in_features)
+        # lora_A.t() shape: (in_features, r)
+        # lora_B.t() shape: (r, out_features)
+        after_A = self.dropout(x) @ self.lora_A.t()
+        lora_out = after_A @ self.lora_B.t()
 
+        # 3. Combine with scaling
         return base_out + self.scaling * lora_out
 
 
@@ -57,8 +71,27 @@ def apply_lora_to_decoder(model, r=8, alpha=16, dropout=0.05):
         layer.ffn.w_1 = LoRALinear(layer.ffn.w_1, r, alpha, dropout)
         layer.ffn.w_2 = LoRALinear(layer.ffn.w_2, r, alpha, dropout)
 
+    # 3. Explicitly unfreeze ONLY the LoRA parameters just to be safe
+    # (Since your LoRALinear code sets base params to False, but lora_A/B default to True)
+    for name, param in model.named_parameters():
+        if "lora_" in name:
+            param.requires_grad = True
+
     return model
 
+# --- Verification Utility ---
+def print_trainable_parameters(model):
+    trainable_params = 0
+    all_param = 0
+    for _, param in model.named_parameters():
+        all_param += param.numel()
+        if param.requires_grad:
+            trainable_params += param.numel()
+    print(
+        f"Trainable params: {trainable_params} | "
+        f"All params: {all_param} | "
+        f"Trainable %: {100 * trainable_params / all_param:.4f}%"
+    )
 
 def lora_parameters(model):
     return [p for n, p in model.named_parameters() if "lora_" in n]
