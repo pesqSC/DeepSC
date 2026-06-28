@@ -20,7 +20,13 @@ from teacher import build_teacher
 from models.rx_model import Receiver
 from models.tx_model import Transmitter
 from utils import create_masks, loss_function, validate_multi_epoch, save_student_receiver
-from utils import kd_kl_loss, masked_ce_loss, feature_distillation_loss, SNR_to_noise
+from utils import (
+    kd_kl_loss, 
+    masked_ce_loss, 
+    feature_distillation_loss, 
+    SNR_to_noise, 
+    masked_ce_loss2
+)
 
 
 
@@ -42,7 +48,7 @@ def parse_args():
 
     # train
     parser.add_argument("--batch-size", type=int, default=96)
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
     parser.add_argument("--grad-clip", type=float, default=1.0)
@@ -117,7 +123,6 @@ def train(
     optimizer: [optim.Adam],
     pad_idx,
     channel,
-    noise_std,
     device: torch.device,
     criterion,
     epoch,
@@ -165,22 +170,32 @@ def train(
 
         src_mask, look_ahead_mask = create_masks(src, trg_inp, pad_idx)
 
+        if args.snr_mode == "fixed":
+            snr_db = args.snr_db
+        else:
+            snr_db = np.random.uniform(
+                args.snr_db_low,
+                args.snr_db_high
+            )
+
+        noise_std = SNR_to_noise(snr_db)
+
         with torch.no_grad():
-            tx_en_out, tx_ch_en_out, Tx_sig, z_noisy = transmitter(
+            _, _, _, z_noisy = transmitter(
                 src, 
                 src_mask, 
                 channel, 
                 noise_std
             )
             
-            t_logits, rx_ch_dec_out, rx_dec_out = teacher(
+            t_logits, t_rx_ch, _ = teacher(
                 z_noisy=z_noisy, 
                 trg_inp=trg_inp, 
                 look_ahead_mask=look_ahead_mask,
                 src_mask=src_mask
             )
 
-        s1_logits, s1_ch_dec_out, s1_dec_out = student_1(
+        s1_logits, s1_rx_ch, s1_dec_out = student_1(
             z_noisy, 
             trg_inp, 
             look_ahead_mask, 
@@ -188,29 +203,43 @@ def train(
         )
 
 
-        s2_logits, s2_ch_dec_out, s2_dec_out = student_2(
-            z_noisy, 
-            trg_inp, 
-            look_ahead_mask, 
-            src_mask
+        # s2_logits, s2_ch_dec_out, s2_dec_out = student_2(
+        #     z_noisy, 
+        #     trg_inp, 
+        #     look_ahead_mask, 
+        #     src_mask
+        # )
+        s1_ce = masked_ce_loss(
+            s1_logits,
+            trg_real,
+            pad_idx
         )
 
-        s1_ce = loss_function(
-            s1_logits.contiguous().view(-1, s1_logits.size(-1)),
-            trg_real.contiguous().view(-1),
-            pad_idx,
-            criterion
-        )
+        # s1_ce = loss_function(
+        #     s1_logits.contiguous().view(-1, s1_logits.size(-1)),
+        #     trg_real.contiguous().view(-1),
+        #     pad_idx,
+        #     criterion
+        # )
 
-        s2_ce = loss_function(
-            s2_logits.contiguous().view(-1, s2_logits.size(-1)),
-            trg_real.contiguous().view(-1),
-            pad_idx,
-            criterion
-        )
+        # s2_ce = loss_function(
+        #     s2_logits.contiguous().view(-1, s2_logits.size(-1)),
+        #     trg_real.contiguous().view(-1),
+        #     pad_idx,
+        #     criterion
+        # )
 
         kd_s1 = kd_kl_loss(s1_logits, t_logits, trg_real, pad_idx, args.temperature)
-        kd_s2 = kd_kl_loss(s2_logits, t_logits, trg_real, pad_idx, args.temperature)
+        # kd_s2 = kd_kl_loss(s2_logits, t_logits, trg_real, pad_idx, args.temperature)
+
+        src_valid = (src != pad_idx).float()
+
+
+        feat_s1 = masked_mse_loss(
+            s1_rx,
+            t_rx.detach(),
+            src_valid
+        )
 
         # feat = masked_ce_loss(s_ch_dec_out, rx_ch_dec_out.detach(), pad_idx)
         # feat =  loss_function(
@@ -224,27 +253,27 @@ def train(
 
         # loss = args.alpha * ce + args.beta * kd + args.gamma * feat
         loss_s1 = (args.alpha * s1_ce) + (args.beta * kd_s1)
-        loss_s2 = (args.alpha * s2_ce) + (args.beta * kd_s2)
+        # loss_s2 = (args.alpha * s2_ce) + (args.beta * kd_s2)
 
         loss_s1.backward()
-        loss_s2.backward()
+        # loss_s2.backward()
 
         
         if args.grad_clip is not None and args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(student_1.parameters(), args.grad_clip)
-            torch.nn.utils.clip_grad_norm_(student_2.parameters(), args.grad_clip)
+            # torch.nn.utils.clip_grad_norm_(student_2.parameters(), args.grad_clip)
         
         opt_s_1.step()
-        opt_s_2.step()
+        # opt_s_2.step()
 
         total_loss_s1 += float(loss_s1.item())
         total_ce_s1 += float(s1_ce.item())
         total_kd_s1 += float(kd_s1.item())
         # total_feat += float(feat.item())
         
-        total_loss_s2 += float(loss_s2.item())
-        total_ce_s2 += float(s2_ce.item())
-        total_kd_s2 += float(kd_s2.item())
+        # total_loss_s2 += float(loss_s2.item())
+        # total_ce_s2 += float(s2_ce.item())
+        # total_kd_s2 += float(kd_s2.item())
         # pbar.set_description(f"Loss: {loss.item():.4f}")
     
         # pbar.set_description(
@@ -257,9 +286,9 @@ def train(
             L1=f"{loss_s1.item():.3f}",
             CE1=f"{s1_ce.item():.3f}",
             KD1=f"{kd_s1.item():.3f}",
-            L2=f"{loss_s2.item():.3f}",
-            CE2=f"{s2_ce.item():.3f}",
-            KD2=f"{kd_s2.item():.3f}",
+            # L2=f"{loss_s2.item():.3f}",
+            # CE2=f"{s2_ce.item():.3f}",
+            # KD2=f"{kd_s2.item():.3f}",
         )
 
     n = len(train_loader)
@@ -270,12 +299,12 @@ def train(
             "kd": total_kd_s1 / n,
             # "feat": total_feat / n
         },
-        {
-            "loss": total_loss_s2 / n,
-            "ce": total_ce_s2 / n,
-            "kd": total_kd_s2 / n,
-            # "feat": total_feat / n
-        }
+        # {
+        #     "loss": total_loss_s2 / n,
+        #     "ce": total_ce_s2 / n,
+        #     "kd": total_kd_s2 / n,
+        #     # "feat": total_feat / n
+        # }
     ]
 
 def main():
