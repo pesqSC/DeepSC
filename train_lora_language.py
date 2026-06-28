@@ -79,7 +79,8 @@ def validate(
     
     with torch.no_grad():
         for src, trg in pbar:
-            sents = sents.to(device)
+            src = src.to(device)
+            trg = trg.to(device)
             loss = val_step(transmitter,LoRA, src, trg, 0.1, pad_idx,
                              criterion, args.channel,noise_std)
 
