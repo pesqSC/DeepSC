@@ -64,7 +64,7 @@ def parse_args():
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
     # KD
-    parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument("--temperature", type=float, default=3.0)
     parser.add_argument("--alpha", type=float, default=0.5, help="CE weight")
     parser.add_argument("--beta", type=float, default=0.5, help="KD weight")
     parser.add_argument("--gamma", type=float, default=0.1, help="Feature MSE weight")
@@ -543,32 +543,31 @@ def main():
             )
 
             
-            if i == 1:
-                return
-            if val_stats[i]["loss"] < best_val[i]:
-                best_val[i] = val_stats[i]["loss"]
+            if i != 1:
+                if val_stats[i]["loss"] < best_val[i]:
+                    best_val[i] = val_stats[i]["loss"]
 
-                best_path = os.path.join(
-                    args.save_dir,
-                    f"student_{i+1}_tr_best.pth"
-                )
+                    best_path = os.path.join(
+                        args.save_dir,
+                        f"student_{i+1}_tr_best.pth"
+                    )
 
-                save_student_receiver(
-                    student,
-                    best_path,
-                    meta={
-                        "student_id": i + 1,
-                        "epoch": epoch + 1,
-                        "val_loss": val_stats[i]["loss"],
-                        "temperature": args.temperature,
-                        "alpha": args.alpha,
-                        "beta": args.beta,
-                        "gamma": args.gamma,
-                        "channel": args.channel,
-                    },
-                )
+                    save_student_receiver(
+                        student,
+                        best_path,
+                        meta={
+                            "student_id": i + 1,
+                            "epoch": epoch + 1,
+                            "val_loss": val_stats[i]["loss"],
+                            "temperature": args.temperature,
+                            "alpha": args.alpha,
+                            "beta": args.beta,
+                            "gamma": args.gamma,
+                            "channel": args.channel,
+                        },
+                    )
 
-                print(f"  -> saved best student {i+1} TR to: {best_path}")
+                    print(f"  -> saved best student {i+1} TR to: {best_path}")
 
         # if val_stats["loss"] < best_val:
         #     best_val = val_stats["loss"]
