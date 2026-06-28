@@ -283,11 +283,11 @@ def main():
 
     criterion = torch.nn.CrossEntropyLoss(reduction = 'none')
     
-    pbar = tqdm(range(args.epochs))
+    # pbar = tqdm(range(args.epochs))
 
     best_val_loss = float('inf')
     
-    for epoch in pbar:
+    for epoch in range(args.epochs):
 
         noise_std = np.random.uniform(
             SNR_to_noise(args.snr_db_low), 
