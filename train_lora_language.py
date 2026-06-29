@@ -399,7 +399,7 @@ def main():
     
     for epoch in range(args.epochs):
 
-        model, loss = train_lora_epoch(
+        loss = train_lora_epoch(
             epoch,
             transmitter,
             LoRA,
