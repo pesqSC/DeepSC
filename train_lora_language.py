@@ -9,9 +9,14 @@ from tqdm import tqdm
 
 from dataset_multilingual import EurParallelDataset, collate_parallel
 from models.transceiver import DeepSC
-from models.lora import apply_lora_to_decoder, lora_parameters, save_lora
 from student import Student
 from models.tx_model import Transmitter
+from models.lora import (
+    apply_lora_to_decoder,
+    enable_language_adaptation,
+    adaptation_parameters,
+    save_language_adapter,
+)
 from utils import (
     SNR_to_noise, 
     create_masks, 
@@ -63,14 +68,23 @@ def validate(
     train_lag
 ):
     test_eur = EurParallelDataset(train_lag, 'test')
+
     test_iterator = DataLoader(
                         test_eur, 
                         batch_size=args.batch_size, 
                         num_workers=0,
                         pin_memory=True, 
-                        collate_fn=collate_parallel
+                        collate_fn=lambda batch: collate_parallel(
+                            batch,
+                            pad_idx,
+                        )
                     )
+
     transmitter.eval()
+
+    for parameter in transmitter.parameters():
+        parameter.requires_grad = False
+
     LoRA.eval()
 
     pbar = tqdm(test_iterator)
@@ -102,8 +116,7 @@ def train_lora_epoch(
     device, 
     pad_idx,
     criterion,
-    channel="AWGN", 
-    snr=12
+    args,
 ):
     LoraModel.train()
     total_loss = 0
@@ -121,6 +134,13 @@ def train_lora_epoch(
 
         src_mask, look_ahead_mask = create_masks(src, trg_inp, pad_idx)
 
+        snr_db = np.random.uniform(
+            args.snr_db_low,
+            args.snr_db_high,
+        )
+
+        noise_std = SNR_to_noise(snr_db)
+
         optimizer.zero_grad()
 
         with torch.no_grad():
@@ -131,7 +151,7 @@ def train_lora_epoch(
                 noise_std
             )
 
-        l1_logits, l1_ch_dec_out, l1_dec_out = LoraModel(
+        logits, l1_ch_dec_out, l1_dec_out = LoraModel(
             z_noisy, 
             trg_inp, 
             look_ahead_mask, 
@@ -146,9 +166,9 @@ def train_lora_epoch(
         #     noise_std,
         #     channel
         # )
-        ntokens = l1_logits.size(-1)
+        ntokens = logits.size(-1)
 
-        loss = loss_function(l1_logits.contiguous().view(-1, ntokens), 
+        loss = loss_function(logits.contiguous().view(-1, ntokens), 
                          trg_real.contiguous().view(-1), 
                          pad_idx, criterion)
         # loss = torch.nn.functional.cross_entropy(
@@ -161,9 +181,10 @@ def train_lora_epoch(
         optimizer.step()
 
         total_loss += loss.item()
+        num_batches += 1
         pbar.set_description(f"Epoch {epoch + 1} Train; Loss: {loss.item():.5f}")
 
-    return LoraModel, (total_loss / len(loader))
+    return total_loss / max(num_batches, 1)
 
 
 def main():
@@ -185,6 +206,13 @@ def main():
     parser.add_argument("--epochs", default=200, type=int)
     parser.add_argument("--batch-size", default=256, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
+    parser.add_argument("--lora-rank", type=int, default=8)
+    parser.add_argument("--lora-alpha", type=float, default=16.0)
+    parser.add_argument("--lora-dropout", type=float, default=0.05)
+
+    parser.add_argument("--embedding-lr", type=float, default=2e-5)
+    parser.add_argument("--output-lr", type=float, default=5e-5)
+    parser.add_argument("--norm-lr", type=float, default=2e-5)
 
     parser.add_argument("--num-layers", default=6, type=int)
     parser.add_argument("--num-heads", default=8, type=int)
@@ -275,9 +303,83 @@ def main():
     r=8
     alpha=16
 
-    LoRA = apply_lora_to_decoder(student, r=r, alpha=alpha, dropout=0.05).to(device)
+    for parameter in student.parameters():
+        parameter.requires_grad = False
 
-    optimizer = torch.optim.Adam(lora_parameters(student), lr=args.lr)
+    LoRA = apply_lora_to_decoder(
+        student,
+        r=args.lora_rank,
+        alpha=args.lora_alpha,
+        dropout=args.lora_dropout,
+    )
+
+    LoRA = enable_language_adaptation(
+        LoRA,
+        train_embedding=True,
+        train_output_head=True,
+        train_layer_norm=True,
+    )
+
+    for name, parameter in LoRA.named_parameters():
+        if parameter.requires_grad:
+            print("TRAINABLE:", name, tuple(parameter.shape))
+
+    LoRA = LoRA.to(device)
+
+    # optimizer = torch.optim.Adam(lora_parameters(student), lr=args.lr)
+
+    lora_params = []
+    embedding_params = []
+    output_params = []
+    norm_params = []
+
+    for name, parameter in LoRA.named_parameters():
+        if not parameter.requires_grad:
+            continue
+
+        if "lora_" in name:
+            lora_params.append(parameter)
+        elif name.startswith("decoder.embedding"):
+            embedding_params.append(parameter)
+        elif name.startswith("dense"):
+            output_params.append(parameter)
+        elif "layernorm" in name:
+            norm_params.append(parameter)
+
+    parameter_groups = []
+
+    if lora_params:
+        parameter_groups.append({
+            "params": lora_params,
+            "lr": args.lr,
+            "name": "lora",
+        })
+
+    if embedding_params:
+        parameter_groups.append({
+            "params": embedding_params,
+            "lr": args.embedding_lr,
+            "name": "embedding",
+        })
+
+    if output_params:
+        parameter_groups.append({
+            "params": output_params,
+            "lr": args.output_lr,
+            "name": "output",
+        })
+
+    if norm_params:
+        parameter_groups.append({
+            "params": norm_params,
+            "lr": args.norm_lr,
+            "name": "layernorm",
+        })
+
+    optimizer = torch.optim.AdamW(
+        parameter_groups,
+        weight_decay=1e-4,
+    )
     
     os.makedirs(args.save_lora, exist_ok=True)
 
@@ -286,14 +388,15 @@ def main():
     # pbar = tqdm(range(args.epochs))
 
     best_val_loss = float('inf')
+
+
+    transmitter.eval()
+
+    for parameter in transmitter.parameters():
+        parameter.requires_grad = False
+
     
     for epoch in range(args.epochs):
-
-        noise_std = np.random.uniform(
-            SNR_to_noise(args.snr_db_low), 
-            SNR_to_noise(args.snr_db_high), 
-            # size=(1)
-        )
 
         model, loss = train_lora_epoch(
             epoch,
@@ -304,20 +407,21 @@ def main():
             device,
             pad_idx,
             criterion,
-            args.channel,
-            noise_std
+            args
         )
 
+        val_noise_std = SNR_to_noise(8.0)   
+        
         val_loss = validate(
-            epoch,
-            args,
-            transmitter,
-            LoRA,
-            criterion,
-            device,
-            pad_idx,
-            noise_std,
-            train_lag
+            epoch=epoch,
+            args=args,
+            transmitter=transmitter,
+            LoRA=LoRA,
+            criterion=criterion,
+            device=device,
+            pad_idx=pad_idx,
+            noise_std=val_noise_std,
+            train_lag=train_lag,
         )
 
         save_epoch_results(
@@ -333,7 +437,13 @@ def main():
             
             best_val_loss = val_loss
 
-            save_lora(epoch, model, args.save_lora, f'{train_lag}_r{r}')
+            save_language_adapter(
+                epoch=epoch,
+                model=LoRA,
+                save_dir=args.save_lora,
+                adapter_name=train_lag,
+                optimizer=optimizer,
+        )
             print(f"Saved LoRA adapter to {args.save_lora}")
 
 
