@@ -119,7 +119,8 @@ def train_lora_epoch(
     args,
 ):
     LoraModel.train()
-    total_loss = 0
+    total_loss = 0.0
+    num_batches=0.0
 
     # noise_std = SNR_to_noise(snr)
     
