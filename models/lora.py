@@ -97,32 +97,47 @@ def lora_parameters(model):
     return [p for n, p in model.named_parameters() if "lora_" in n]
 
 
-def save_lora(
-    epoch: int,
-    model: torch.nn.Module,
-    save_dir: str,
-    adapter_name: str,
-) -> str:
+def save_language_adapter(
+    epoch,
+    model,
+    save_dir,
+    adapter_name,
+    optimizer=None,
+):
     os.makedirs(save_dir, exist_ok=True)
 
-    filename = f"student_lora_{adapter_name}_{epoch + 1:02d}.pth"
-    save_path = os.path.join(save_dir, filename)
+    save_path = os.path.join(
+        save_dir,
+        f"student_adapter_{adapter_name}_{epoch + 1:02d}.pth",
+    )
 
-    lora_state = {
-        key: value.detach().cpu()
-        for key, value in model.state_dict().items()
-        if "lora_" in key
-    }
+    adaptation_state = {}
 
-    if not lora_state:
-        raise RuntimeError(
-            "No LoRA parameters were found in the model."
+    for name, tensor in model.state_dict().items():
+        should_save = (
+            "lora_" in name
+            or name.startswith("decoder.embedding.")
+            or name.startswith("dense.")
+            or "layernorm" in name
         )
 
-    torch.save(lora_state, save_path)
+        if should_save:
+            adaptation_state[name] = tensor.detach().cpu()
+
+    checkpoint = {
+        "epoch": epoch + 1,
+        "adapter_name": adapter_name,
+        "model_state_dict": adaptation_state,
+    }
+
+    if optimizer is not None:
+        checkpoint["optimizer_state_dict"] = optimizer.state_dict()
+
+    torch.save(checkpoint, save_path)
 
     print(
-        f"Saved {len(lora_state)} LoRA tensors to: {save_path}"
+        f"Saved {len(adaptation_state)} adaptation tensors to "
+        f"{save_path}"
     )
 
     return save_path
@@ -167,3 +182,44 @@ def load_lora(model, path, device):
 
     print(f"Loaded {len(lora_keys)} LoRA tensors.")
     return model
+
+
+def enable_language_adaptation(
+    model,
+    train_embedding=True,
+    train_output_head=True,
+    train_layer_norm=True,
+):
+    """
+    Keep the base student frozen while enabling the small set of
+    parameters needed for language adaptation.
+    """
+
+    if train_embedding:
+        for parameter in model.decoder.embedding.parameters():
+            parameter.requires_grad = True
+
+    if train_output_head:
+        for parameter in model.dense.parameters():
+            parameter.requires_grad = True
+
+    if train_layer_norm:
+        for layer in model.decoder.dec_layers:
+            for parameter in layer.layernorm1.parameters():
+                parameter.requires_grad = True
+
+            for parameter in layer.layernorm2.parameters():
+                parameter.requires_grad = True
+
+            for parameter in layer.layernorm3.parameters():
+                parameter.requires_grad = True
+
+    return model
+
+
+def adaptation_parameters(model):
+    return [
+        parameter
+        for parameter in model.parameters()
+        if parameter.requires_grad
+    ]
