@@ -121,7 +121,7 @@ def train_lora_epoch(
     LoraModel.train()
     total_loss = 0
 
-    noise_std = SNR_to_noise(snr)
+    # noise_std = SNR_to_noise(snr)
     
     pbar = tqdm(loader)
 
@@ -147,7 +147,7 @@ def train_lora_epoch(
             tx_en_out, tx_ch_en_out, Tx_sig, z_noisy = transmitter(
                 src, 
                 src_mask, 
-                channel, 
+                args.channel, 
                 noise_std
             )
 
