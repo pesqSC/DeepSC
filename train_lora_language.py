@@ -426,7 +426,7 @@ def main():
         )
 
         save_epoch_results(
-            os.path.join(args.save_lora, 'results.csv'),
+            os.path.join(args.save_lora, 'results_30_06_2026.csv'),
             epoch,
             {
                 'loss': loss,
@@ -442,7 +442,7 @@ def main():
                 epoch=epoch,
                 model=LoRA,
                 save_dir=args.save_lora,
-                adapter_name=train_lag,
+                adapter_name=f'{train_lag}_best',
                 optimizer=optimizer,
         )
             print(f"Saved LoRA adapter to {args.save_lora}")
