@@ -223,3 +223,61 @@ def adaptation_parameters(model):
         for parameter in model.parameters()
         if parameter.requires_grad
     ]
+
+def load_language_adapter(model, path, device):
+    checkpoint = torch.load(
+        path,
+        map_location=device,
+    )
+
+    if (
+        isinstance(checkpoint, dict)
+        and "model_state_dict" in checkpoint
+    ):
+        state_dict = checkpoint["model_state_dict"]
+    else:
+        state_dict = checkpoint
+
+    result = model.load_state_dict(
+        state_dict,
+        strict=False,
+    )
+
+    adapter_keys = [
+        key
+        for key in state_dict.keys()
+        if (
+            "lora_" in key
+            or key.startswith("decoder.embedding.")
+            or key.startswith("dense.")
+            or "layernorm" in key
+        )
+    ]
+
+    unexpected_adapter_keys = [
+        key
+        for key in result.unexpected_keys
+        if (
+            "lora_" in key
+            or key.startswith("decoder.embedding.")
+            or key.startswith("dense.")
+            or "layernorm" in key
+        )
+    ]
+
+    if not adapter_keys:
+        raise RuntimeError(
+            f"No adaptation parameters found in {path}"
+        )
+
+    if unexpected_adapter_keys:
+        raise RuntimeError(
+            "Some adapter parameters did not match:\n"
+            + "\n".join(unexpected_adapter_keys)
+        )
+
+    print(f"Loaded {len(adapter_keys)} adaptation tensors.")
+    print(f"Missing keys: {len(result.missing_keys)}")
+    print(f"Unexpected keys: {len(result.unexpected_keys)}")
+
+    return model
