@@ -112,11 +112,17 @@ def valid_sentence(sentence, min_len, max_len):
 
 
 def make_parallel_dataset(src_path, trg_path, token_to_idx, trg_lang, min_len, max_len):
-    data = []
+    dataset = []
 
     for src_file, trg_file in paired_text_files(src_path, trg_path):
         src_lines = read_file(src_file)
         trg_lines = read_file(trg_file)
+
+        if len(src_lines) != len(trg_lines):
+            raise ValueError(
+                f"Line-count mismatch: {src_file} has {len(src_lines)} lines, "
+                f"but {trg_file} has {len(trg_lines)} lines."
+            )
 
         for src, trg in zip(src_lines, trg_lines):
             src = normalize_text(src)
@@ -134,9 +140,9 @@ def make_parallel_dataset(src_path, trg_path, token_to_idx, trg_lang, min_len, m
             src_ids = encode_sentence(src, token_to_idx, "<EN>")
             trg_ids = encode_sentence(trg, token_to_idx, f"<{trg_lang.upper()}>")
 
-            data.append((src_ids, trg_ids))
+            dataset.append((src_ids, trg_ids))
 
-    return data
+    return dataset
 
 
 def save_pickle(data, path):
@@ -174,7 +180,7 @@ def main():
     all_sentences = []
 
     for path in tqdm(files.values(), desc="Processing files"):
-        for line in tqdm(read_file(path), desc=f"Reading {path.name}", leave=False):
+        for line in tqdm(read_file(path), desc=f"Reading {path.basename}", leave=False):
             line = normalize_text(line)
             if valid_sentence(line, args.min_len, args.max_len):
                 all_sentences.append(line)
