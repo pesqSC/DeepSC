@@ -384,7 +384,7 @@ def main():
     
     os.makedirs(args.save_lora, exist_ok=True)
 
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.CrossEntropyLoss(reduction='none')
     
     # pbar = tqdm(range(args.epochs))
 
