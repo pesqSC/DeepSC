@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument("--save-dir", type=str, default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd")
 
     # model config (must match teacher checkpoint)
-    parser.add_argument("--max-len", type=int, default=30)
+    parser.add_argument("--max-len", type=int, default=33)
     parser.add_argument("--d-model", type=int, default=128)
     parser.add_argument("--dff", type=int, default=512)
     parser.add_argument("--num-layers", type=int, default=6)
@@ -49,7 +49,7 @@ def parse_args():
 
     # train
     parser.add_argument("--batch-size", type=int, default=126)
-    parser.add_argument("--epochs", type=int, default=200)
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
     parser.add_argument("--grad-clip", type=float, default=1.0)
@@ -346,7 +346,10 @@ def main():
         vocab = json.load(f)
     token_to_idx = vocab["token_to_idx"]
     num_vocab = len(token_to_idx)
+    
     pad_idx = token_to_idx["<PAD>"] if "<PAD>" in token_to_idx else token_to_idx[""]
+    print(pad_idx)
+    
     start_idx = token_to_idx["<START>"]
     end_idx = token_to_idx["<END>"]
 
@@ -376,8 +379,8 @@ def main():
         args.num_layers, 
         num_vocab,
         num_vocab,
-        num_vocab,
-        num_vocab,
+        args.max_len,
+        args.max_len,
         args.d_model,
         args.num_heads,
         args.dff,
@@ -425,8 +428,8 @@ def main():
         2, 
         num_vocab, 
         num_vocab, 
-        num_vocab, 
-        num_vocab, 
+        args.max_len, 
+        args.max_len, 
         args.d_model, 
         args.num_heads, 
         args.dff, 
@@ -434,11 +437,11 @@ def main():
     ).to(device)
     
     student_2 = Student(
-        2, 
+        1, 
         num_vocab, 
         num_vocab, 
-        num_vocab, 
-        num_vocab, 
+        args.max_len, 
+        args.max_len,
         args.d_model, 
         args.num_heads, 
         args.dff, 
@@ -454,7 +457,7 @@ def main():
             # size=(1)
         )
 
-    criterion = nn.CrossEntropyLoss(reduction = 'none')
+    criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
     optimizer_1 = torch.optim.Adam(
             student_1.parameters(),
             lr=args.lr,
