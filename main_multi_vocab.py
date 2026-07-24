@@ -50,7 +50,7 @@ def validate(epoch, args, pad_idx, criterion, net):
     return total/len(test_iterator)
 
 
-def train(epoch, args, pad_idx, optimizer, criterion, mi_opt, net, mi_net=None):
+def train(epoch, args, pad_idx, optimizer, criterion, net):
     train_eur= EurParallelDataset(args.en, 'train')
     train_iterator = DataLoader(train_eur, batch_size=args.batch_size, num_workers=0,
                                 pin_memory=True, collate_fn=collate_parallel)
@@ -62,29 +62,30 @@ def train(epoch, args, pad_idx, optimizer, criterion, mi_opt, net, mi_net=None):
         src = src.to(device)
         trg = trg.to(device)
 
-        if mi_net is not None:
-            mi = train_mi(net, mi_net, src, trg, 0.1, pad_idx, mi_opt, args.channel)
-            loss = train_step(net, src, trg, 0.1, pad_idx,
-                              optimizer, criterion, args.channel, mi_net)
-            pbar.set_description(
-                'Epoch: {};  Type: Train; Loss: {:.5f}; MI {:.5f}'.format(
-                    epoch + 1, loss, mi
-                )
+        loss = train_step(net, src, trg, noise_std[0], pad_idx,
+                            optimizer, criterion, args.channel)
+        pbar.set_description(
+            'Epoch: {};  Type: Train; Loss: {:.5f}'.format(
+                epoch + 1, loss
             )
-        else:
-            loss = train_step(net, src, trg, noise_std[0], pad_idx,
-                              optimizer, criterion, args.channel)
-            pbar.set_description(
-                'Epoch: {};  Type: Train; Loss: {:.5f}'.format(
-                    epoch + 1, loss
-                )
-            )
+        )
+
+        # if mi_net is not None:
+        #     mi = train_mi(net, mi_net, src, trg, 0.1, pad_idx, mi_opt, args.channel)
+        #     loss = train_step(net, src, trg, 0.1, pad_idx,
+        #                       optimizer, criterion, args.channel, mi_net)
+        #     pbar.set_description(
+        #         'Epoch: {};  Type: Train; Loss: {:.5f}; MI {:.5f}'.format(
+        #             epoch + 1, loss, mi
+        #         )
+        #     )
+        # else:
 
 def main():
     parser = argparse.ArgumentParser()
     #parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
     parser.add_argument('--vocab-file', default='europarl/vocab_multilingual.json', type=str)
-    parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh/muiltilingual', type=str)
+    parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh/multilingual', type=str)
     parser.add_argument('--channel', default='Rayleigh', type=str, help = 'Please choose AWGN, Rayleigh, and Rician')
     parser.add_argument('--MAX-LENGTH', default=33, type=int)
     parser.add_argument('--MIN-LENGTH', default=4, type=int)
@@ -112,20 +113,21 @@ def main():
 
     """ define optimizer and loss function """
     deepsc = DeepSC(args.num_layers, num_vocab, num_vocab,
-                        num_vocab, num_vocab, args.d_model, args.num_heads,
+                        args.MAX_LENGTH, args.MAX_LENGTH, args.d_model, args.num_heads,
                         args.dff, 0.1).to(device)
-    mi_net = Mine().to(device)
+
     criterion = nn.CrossEntropyLoss(reduction = 'none')
+
     optimizer = torch.optim.Adam(deepsc.parameters(),
                                  lr=1e-4, betas=(0.9, 0.98), eps=1e-8, weight_decay = 5e-4)
-    mi_opt = torch.optim.Adam(mi_net.parameters(), lr=1e-3)
+
     #opt = NoamOpt(args.d_model, 1, 4000, optimizer)
     initNetParams(deepsc)
     for epoch in range(args.epochs):
         start = time.time()
         record_acc = 10
 
-        train(epoch, args, pad_idx, optimizer, criterion, mi_opt, deepsc)
+        train(epoch, args, pad_idx, optimizer, criterion, deepsc)
         avg_acc = validate(epoch, args, pad_idx, criterion, deepsc)
 
         if avg_acc < record_acc:
