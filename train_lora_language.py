@@ -204,7 +204,7 @@ def main():
     parser.add_argument("--snr-db-high", type=float, default=10.0)
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
-    parser.add_argument("--epochs", default=200, type=int)
+    parser.add_argument("--epochs", default=50, type=int)
     parser.add_argument("--batch-size", default=256, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
     parser.add_argument("--lora-rank", type=int, default=8)
