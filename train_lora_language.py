@@ -237,7 +237,7 @@ def main():
     vocab_size = len(token_to_idx)
     pad_idx = token_to_idx["<PAD>"]
 
-    train_lag = args.en_pt
+    train_lag = args.en_fr
 
     dataset = EurParallelDataset(train_lag, 'train')
 
@@ -384,7 +384,7 @@ def main():
     
     os.makedirs(args.save_lora, exist_ok=True)
 
-    criterion = torch.nn.CrossEntropyLoss(reduction = 'none')
+    criterion = torch.nn.CrossEntropyLoss()
     
     # pbar = tqdm(range(args.epochs))
 
@@ -426,7 +426,7 @@ def main():
         )
 
         save_epoch_results(
-            os.path.join(args.save_lora, 'results_30_06_2026.csv'),
+            os.path.join(f'{args.save_lora}_{train_lag}', f'results_{train_lag}_24_07_2026.csv'),
             epoch,
             {
                 'loss': loss,
@@ -445,7 +445,7 @@ def main():
                 adapter_name=f'{train_lag}_best',
                 optimizer=optimizer,
         )
-            print(f"Saved LoRA adapter to {args.save_lora}")
+            print(f"Saved LoRA adapter to {args.save_lora}_{train_lag}")
 
 
 if __name__ == "__main__":
