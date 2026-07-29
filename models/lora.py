@@ -12,7 +12,8 @@ class LoRALinear(nn.Module):
         self.base = base_layer
         self.r = r
         self.alpha = alpha
-        self.scaling = alpha / r
+        if self.r > 0:
+            self.scaling = alpha / r
         self.dropout = nn.Dropout(dropout)
 
         for p in self.base.parameters():
