@@ -211,21 +211,21 @@ def main():
     print("Vocab size:", len(token_to_idx))
 
     # 2. Create EN→EN for teacher/KD
-    en_en_data = make_parallel_dataset(
-        files["en"],
-        files["en"],
-        token_to_idx,
-        "en",
-        args.min_len,
-        args.max_len,
-    )
+    # en_en_data = make_parallel_dataset(
+    #     files["en"],
+    #     files["en"],
+    #     token_to_idx,
+    #     "en",
+    #     args.min_len,
+    #     args.max_len,
+    # )
 
     # 3. Create EN→PT / EN→ES / EN→FR for LoRA
     datasets = {
-        "en_en": en_en_data,
-        "en_pt": make_parallel_dataset(files["en"], files["pt"], token_to_idx, "pt", args.min_len, args.max_len),
-        "en_es": make_parallel_dataset(files["en"], files["es"], token_to_idx, "es", args.min_len, args.max_len),
-        "en_fr": make_parallel_dataset(files["en"], files["fr"], token_to_idx, "fr", args.min_len, args.max_len),
+        "pt_pt": make_parallel_dataset(files["pt"], files["pt"], token_to_idx, "pt", args.min_len, args.max_len),
+        "pt_en": make_parallel_dataset(files["pt"], files["en"], token_to_idx, "en", args.min_len, args.max_len),
+        "pt_es": make_parallel_dataset(files["pt"], files["es"], token_to_idx, "es", args.min_len, args.max_len),
+        "pt_fr": make_parallel_dataset(files["pt"], files["fr"], token_to_idx, "fr", args.min_len, args.max_len),
     }
 
     for name, data in tqdm(datasets.items(), desc="Splitting and saving datasets"):
