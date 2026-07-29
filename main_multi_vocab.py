@@ -27,7 +27,7 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 def validate(epoch, args, pad_idx, criterion, net):
-    test_eur = EurParallelDataset(args.en, 'test')
+    test_eur = EurParallelDataset(args.pt, 'test')
     test_iterator = DataLoader(test_eur, batch_size=args.batch_size, num_workers=0,
                                 pin_memory=True, collate_fn=collate_parallel)
     net.eval()
@@ -51,7 +51,7 @@ def validate(epoch, args, pad_idx, criterion, net):
 
 
 def train(epoch, args, pad_idx, optimizer, criterion, net):
-    train_eur= EurParallelDataset(args.en, 'train')
+    train_eur= EurParallelDataset(args.pt, 'train')
     train_iterator = DataLoader(train_eur, batch_size=args.batch_size, num_workers=0,
                                 pin_memory=True, collate_fn=collate_parallel)
     pbar = tqdm(train_iterator)
@@ -82,6 +82,7 @@ def train(epoch, args, pad_idx, optimizer, criterion, net):
         # else:
 
 def main():
+    setup_seed(42)
     parser = argparse.ArgumentParser()
     #parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
     parser.add_argument('--vocab-file', default='europarl/vocab_multilingual.json', type=str)
@@ -91,14 +92,19 @@ def main():
     parser.add_argument('--MIN-LENGTH', default=4, type=int)
     parser.add_argument('--d-model', default=128, type=int)
     parser.add_argument('--dff', default=512, type=int)
-    parser.add_argument('--num-layers', default=6, type=int)
+    parser.add_argument('--num-layers', default=4, type=int)
     parser.add_argument('--num-heads', default=8, type=int)
     parser.add_argument('--batch-size', default=128, type=int)
-    parser.add_argument('--epochs', default=200, type=int) 
+    parser.add_argument('--epochs', default=50, type=int) 
     parser.add_argument('--en', default='en_en', type=str)
     parser.add_argument('--en-pt', default='en_pt', type=str)
     parser.add_argument('--en-es', default='en_es', type=str)
     parser.add_argument('--en-fr', default='en_fr', type=str)
+
+    parser.add_argument('--pt', default='pt_pt', type=str)
+    parser.add_argument('--pt-pt', default='pt_en', type=str)
+    parser.add_argument('--pt-es', default='pt_es', type=str)
+    parser.add_argument('--pt-fr', default='pt_fr', type=str)
 
     args = parser.parse_args()
     args.vocab_file = './data/train/' + args.vocab_file
@@ -112,14 +118,27 @@ def main():
 
 
     """ define optimizer and loss function """
-    deepsc = DeepSC(args.num_layers, num_vocab, num_vocab,
-                        args.MAX_LENGTH, args.MAX_LENGTH, args.d_model, args.num_heads,
-                        args.dff, 0.1).to(device)
+    deepsc = DeepSC(
+                args.num_layers, 
+                num_vocab, 
+                num_vocab,
+                args.MAX_LENGTH, 
+                args.MAX_LENGTH, 
+                args.d_model, 
+                args.num_heads,
+                args.dff, 
+                0.1
+            ).to(device)
 
     criterion = nn.CrossEntropyLoss(reduction = 'none')
 
-    optimizer = torch.optim.Adam(deepsc.parameters(),
-                                 lr=1e-4, betas=(0.9, 0.98), eps=1e-8, weight_decay = 5e-4)
+    optimizer = torch.optim.Adam(
+                    deepsc.parameters(),
+                    lr=1e-4, 
+                    betas=(0.9, 0.98), 
+                    eps=1e-8, 
+                    weight_decay = 5e-4
+                )
 
     #opt = NoamOpt(args.d_model, 1, 4000, optimizer)
     initNetParams(deepsc)
