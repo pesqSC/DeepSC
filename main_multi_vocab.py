@@ -203,7 +203,7 @@ def main():
         
         save_epoch_results(
             os.path.join(
-                args.checkpoint_path, f'results_{args.channel}_{date.today().strftime("%Y-%m-%d")}.csv'
+                root_dir, f'results_{args.channel}_{date.today().strftime("%Y-%m-%d")}.csv'
             ), 
             epoch, 
             {   
