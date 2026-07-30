@@ -36,7 +36,7 @@ def parse_args():
 
     # files
     parser.add_argument("--vocab-file", type=str, default="./data/train/europarl/vocab_multilingual.json")
-    parser.add_argument("--teacher-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/muiltilingual")
+    parser.add_argument("--teacher-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual/2026-07-30")
     parser.add_argument("--save-dir", type=str, default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd")
 
     # model config (must match teacher checkpoint)
@@ -402,8 +402,8 @@ def main():
     #     args.dropout, 
     #     device
     # )
-    enc_model_path = os.path.join(args.teacher_checkpoint, 'encoder_200.pth')
-    dec_model_path = os.path.join(args.teacher_checkpoint, 'decoder_200.pth')
+    enc_model_path = os.path.join(args.teacher_checkpoint, 'encoder_50.pth')
+    dec_model_path = os.path.join(args.teacher_checkpoint, 'decoder_50.pth')
 
     enc_checkpoint = torch.load(enc_model_path, map_location=device)
     dec_checkpoint = torch.load(dec_model_path, map_location=device)
