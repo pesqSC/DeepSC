@@ -91,7 +91,7 @@ def train(epoch, args, pad_idx, optimizer, criterion, net):
             )
         )
 
-        total_loss += loss.item()
+        total_loss += loss
         num_batches += 1
 
         # if mi_net is not None:
