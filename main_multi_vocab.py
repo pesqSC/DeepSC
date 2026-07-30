@@ -9,13 +9,22 @@ import json
 import torch
 import random
 import torch.nn as nn
+from torch.utils.data import DataLoader
 import numpy as np
-from utils import SNR_to_noise, initNetParams, train_step, val_step, train_mi
+from tqdm import tqdm
+from datetime import date
+
 from dataset_multilingual import EurParallelDataset, collate_parallel
 from models.transceiver import DeepSC
 from models.mutual_info import Mine
-from torch.utils.data import DataLoader
-from tqdm import tqdm
+from utils import (
+    SNR_to_noise, 
+    initNetParams, 
+    train_step, 
+    val_step, 
+    train_mi,
+    save_epoch_results
+)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -70,6 +79,14 @@ def train(epoch, args, pad_idx, optimizer, criterion, net):
             )
         )
 
+        save_epoch_results(
+            os.path.join(
+                args.checkpoint_path, f'results_{args.channel}_{date.today().strftime("%Y-%m-%d")}.csv'
+            ), 
+            epoch, 
+            {'loss': loss}
+        )
+
         # if mi_net is not None:
         #     mi = train_mi(net, mi_net, src, trg, 0.1, pad_idx, mi_opt, args.channel)
         #     loss = train_step(net, src, trg, 0.1, pad_idx,
@@ -92,7 +109,7 @@ def main():
     parser.add_argument('--MIN-LENGTH', default=4, type=int)
     parser.add_argument('--d-model', default=128, type=int)
     parser.add_argument('--dff', default=512, type=int)
-    parser.add_argument('--num-layers', default=4, type=int)
+    parser.add_argument('--num-layers', default=8, type=int)
     parser.add_argument('--num-heads', default=8, type=int)
     parser.add_argument('--batch-size', default=128, type=int)
     parser.add_argument('--epochs', default=50, type=int) 
@@ -141,6 +158,8 @@ def main():
                 )
 
     #opt = NoamOpt(args.d_model, 1, 4000, optimizer)
+    today = date.today()
+
     initNetParams(deepsc)
     for epoch in range(args.epochs):
         start = time.time()
@@ -161,8 +180,8 @@ def main():
                 "decoder": deepsc.decoder.state_dict(),
                 "dense": deepsc.dense.state_dict(),
             }
-            encode_path = args.checkpoint_path + '/encoder_{}.pth'.format(str(epoch + 1).zfill(2))
-            decode_path = args.checkpoint_path + '/decoder_{}.pth'.format(str(epoch + 1).zfill(2))
+            encode_path = args.checkpoint_path + '/' + today.strftime("%Y-%m-%d") + '/encoder_{}.pth'.format(str(epoch + 1).zfill(2))
+            decode_path = args.checkpoint_path + '/' + today.strftime("%Y-%m-%d") + '/decoder_{}.pth'.format(str(epoch + 1).zfill(2))
             with open(encode_path, 'wb') as f:
                 torch.save(encoder_state_dict, f)
             with open(decode_path, 'wb') as f:
