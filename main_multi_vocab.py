@@ -41,22 +41,28 @@ def validate(epoch, args, pad_idx, criterion, net):
                                 pin_memory=True, collate_fn=collate_parallel)
     net.eval()
     pbar = tqdm(test_iterator)
-    total = 0
+    
+    total: float = 0.0
+    num_batches: int = 0
     with torch.no_grad():
         for src, trg in pbar:
             src = src.to(device)
             trg = trg.to(device)
-            loss = val_step(net, src, trg, 0.1, pad_idx,
-                             criterion, args.channel)
+            loss = val_step(
+                        net, src, trg, 0.1, pad_idx,
+                        criterion, args.channel
+                    )
 
             total += loss
+            num_batches += 1
+
             pbar.set_description(
                 'Epoch: {}; Type: VAL; Loss: {:.5f}'.format(
                     epoch + 1, loss
                 )
             )
 
-    return total/len(test_iterator)
+    return total / max(num_batches, 1)
 
 
 def train(epoch, args, pad_idx, optimizer, criterion, net):
@@ -67,25 +73,26 @@ def train(epoch, args, pad_idx, optimizer, criterion, net):
 
     noise_std = np.random.uniform(SNR_to_noise(5), SNR_to_noise(10), size=(1))
 
+    total_loss: float = 0.0
+    num_batches: int = 0
+
     for src, trg in pbar:
         src = src.to(device)
         trg = trg.to(device)
 
-        loss = train_step(net, src, trg, noise_std[0], pad_idx,
-                            optimizer, criterion, args.channel)
+        loss = train_step(
+                    net, src, trg, noise_std[0], pad_idx,
+                    optimizer, criterion, args.channel
+                )
+        
         pbar.set_description(
             'Epoch: {};  Type: Train; Loss: {:.5f}'.format(
                 epoch + 1, loss
             )
         )
 
-        save_epoch_results(
-            os.path.join(
-                args.checkpoint_path, f'results_{args.channel}_{date.today().strftime("%Y-%m-%d")}.csv'
-            ), 
-            epoch, 
-            {'loss': loss}
-        )
+        total_loss += loss.item()
+        num_batches += 1
 
         # if mi_net is not None:
         #     mi = train_mi(net, mi_net, src, trg, 0.1, pad_idx, mi_opt, args.channel)
@@ -97,6 +104,25 @@ def train(epoch, args, pad_idx, optimizer, criterion, net):
         #         )
         #     )
         # else:
+    
+    return total_loss / max(num_batches, 1)
+
+def save_model(net: DeepSC, root_dir: str, epoch: int):
+    encoder_state_dict = {
+        "encoder": net.encoder.state_dict(),
+        "channel_encoder": net.channel_encoder.state_dict(),
+    }
+    decoder_state_dict = {
+        "channel_decoder": net.channel_decoder.state_dict(),
+        "decoder": net.decoder.state_dict(),
+        "dense": net.dense.state_dict(),
+    }
+    encode_path = root_dir + '/encoder_{}.pth'.format(str(epoch + 1).zfill(2))
+    decode_path = root_dir + '/decoder_{}.pth'.format(str(epoch + 1).zfill(2))
+    with open(encode_path, 'wb') as f:
+        torch.save(encoder_state_dict, f)
+    with open(decode_path, 'wb') as f:
+        torch.save(decoder_state_dict, f)
 
 def main():
     setup_seed(42)
@@ -158,35 +184,47 @@ def main():
                 )
 
     #opt = NoamOpt(args.d_model, 1, 4000, optimizer)
-    today = date.today()
 
-    initNetParams(deepsc)
+    today = date.today()
+    
+    root_dir = args.checkpoint_path + '/' + today.strftime("%Y-%m-%d")
+
+    initNetParams(deepsc) # init net parameters
+
     for epoch in range(args.epochs):
         start = time.time()
-        record_acc = 10
+        
+        bast_acc: float = 0.0
 
         train(epoch, args, pad_idx, optimizer, criterion, deepsc)
-        avg_acc = validate(epoch, args, pad_idx, criterion, deepsc)
+        val_loss = validate(epoch, args, pad_idx, criterion, deepsc)
 
-        if avg_acc < record_acc:
-            if not os.path.exists(args.checkpoint_path):
-                os.makedirs(args.checkpoint_path)
-            encoder_state_dict = {
-                "encoder": deepsc.encoder.state_dict(),
-                "channel_encoder": deepsc.channel_encoder.state_dict(),
+        end = time.time()
+        
+        save_epoch_results(
+            os.path.join(
+                args.checkpoint_path, f'results_{args.channel}_{date.today().strftime("%Y-%m-%d")}.csv'
+            ), 
+            epoch, 
+            {   
+                'epoch': epoch + 1,
+                'loss': loss,
+                'val_loss': val_loss,
+                'time': end - start
             }
-            decoder_state_dict = {
-                "channel_decoder": deepsc.channel_decoder.state_dict(),
-                "decoder": deepsc.decoder.state_dict(),
-                "dense": deepsc.dense.state_dict(),
-            }
-            encode_path = args.checkpoint_path + '/' + today.strftime("%Y-%m-%d") + '/encoder_{}.pth'.format(str(epoch + 1).zfill(2))
-            decode_path = args.checkpoint_path + '/' + today.strftime("%Y-%m-%d") + '/decoder_{}.pth'.format(str(epoch + 1).zfill(2))
-            with open(encode_path, 'wb') as f:
-                torch.save(encoder_state_dict, f)
-            with open(decode_path, 'wb') as f:
-                torch.save(decoder_state_dict, f)
-            record_acc = avg_acc
+        )
+
+        if not os.path.exists(root_dir):
+            os.makedirs(root_dir)
+
+        if bast_acc == 0.0:
+            save_model(deepsc, root_dir, epoch)
+            bast_acc = val_loss
+
+        if val_loss < bast_acc:
+            save_model(deepsc, root_dir, epoch)
+            bast_acc = val_loss
+        
     record_loss = []
 
 
