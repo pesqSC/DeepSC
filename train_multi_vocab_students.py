@@ -43,8 +43,8 @@ def parse_args():
     parser.add_argument("--max-len", type=int, default=33)
     parser.add_argument("--d-model", type=int, default=128)
     parser.add_argument("--dff", type=int, default=512)
-    parser.add_argument("--num-layers", type=int, default=6)
-    parser.add_argument("--num-heads", type=int, default=8)
+    parser.add_argument("--num-layers", type=int, default=12)
+    parser.add_argument("--num-heads", type=int, default=16)
     parser.add_argument("--dropout", type=float, default=0.1)
 
     # train
@@ -74,6 +74,11 @@ def parse_args():
     parser.add_argument('--en-pt', default='en_pt', type=str)
     parser.add_argument('--en-es', default='en_es', type=str)
     parser.add_argument('--en-fr', default='en_fr', type=str)
+
+    parser.add_argument('--pt', default='pt_pt', type=str)
+    parser.add_argument('--pt-pt', default='pt_en', type=str)
+    parser.add_argument('--pt-es', default='pt_es', type=str)
+    parser.add_argument('--pt-fr', default='pt_fr', type=str)
 
     return parser.parse_args()
 
@@ -353,8 +358,8 @@ def main():
     start_idx = token_to_idx["<START>"]
     end_idx = token_to_idx["<END>"]
 
-    train_set = EurParallelDataset(args.en, 'train')
-    test_set = EurParallelDataset(args.en, "test")
+    train_set = EurParallelDataset(args.pt, 'train')
+    test_set = EurParallelDataset(args.pt, "test")
 
 
     train_loader = DataLoader(
