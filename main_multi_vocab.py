@@ -65,7 +65,7 @@ def validate(epoch, args, pad_idx, criterion, net):
     return total / max(num_batches, 1)
 
 
-def train(epoch, args, pad_idx, optimizer, criterion, net):
+def train(epoch, args, pad_idx, optimizer, criterion, net)->float:
     train_eur= EurParallelDataset(args.pt, 'train')
     train_iterator = DataLoader(train_eur, batch_size=args.batch_size, num_workers=0,
                                 pin_memory=True, collate_fn=collate_parallel)
@@ -136,7 +136,7 @@ def main():
     parser.add_argument('--d-model', default=128, type=int)
     parser.add_argument('--dff', default=512, type=int)
     parser.add_argument('--num-layers', default=8, type=int)
-    parser.add_argument('--num-heads', default=8, type=int)
+    parser.add_argument('--num-heads', default=12, type=int)
     parser.add_argument('--batch-size', default=128, type=int)
     parser.add_argument('--epochs', default=50, type=int) 
     parser.add_argument('--en', default='en_en', type=str)
@@ -196,7 +196,7 @@ def main():
         
         bast_acc: float = 0.0
 
-        train(epoch, args, pad_idx, optimizer, criterion, deepsc)
+        loss = train(epoch, args, pad_idx, optimizer, criterion, deepsc)
         val_loss = validate(epoch, args, pad_idx, criterion, deepsc)
 
         end = time.time()
@@ -226,8 +226,6 @@ def main():
             bast_acc = val_loss
         
     record_loss = []
-
-
 
 if __name__ == '__main__':
     # setup_seed(10)
