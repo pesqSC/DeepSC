@@ -221,6 +221,7 @@ def main():
     parser.add_argument("--d-model", default=128, type=int)
     parser.add_argument("--dff", default=512, type=int)
 
+    parser.add_argument('--MAX_LEN', default=33, type=int)
     parser.add_argument('--en', default='en_en', type=str)
     parser.add_argument('--en-pt', default='en_pt', type=str)
     parser.add_argument('--en-es', default='en_es', type=str)
@@ -257,8 +258,8 @@ def main():
         args.num_layers,
         vocab_size,
         vocab_size,
-        vocab_size,
-        vocab_size,
+        args.MAX_LEN,
+        args.MAX_LEN,
         args.d_model,
         args.num_heads,
         args.dff,
@@ -271,8 +272,8 @@ def main():
         2,
         vocab_size,
         vocab_size,
-        vocab_size,
-        vocab_size,
+        args.MAX_LEN,
+        args.MAX_LEN,
         args.d_model,
         args.num_heads,
         args.dff,
