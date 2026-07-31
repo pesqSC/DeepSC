@@ -12,12 +12,20 @@ from dataset_multilingual import EurParallelDataset, collate_parallel
 from models.transceiver import DeepSC
 from student import Student
 from models.tx_model import Transmitter
-from models.lora import (
+# from models.lora import (
+#     apply_lora_to_decoder,
+#     enable_language_adaptation,
+#     adaptation_parameters,
+#     save_language_adapter,
+# )
+
+from models.lora2 import (
     apply_lora_to_decoder,
     enable_language_adaptation,
     adaptation_parameters,
     save_language_adapter,
 )
+
 from utils import (
     SNR_to_noise, 
     create_masks, 
