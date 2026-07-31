@@ -6,6 +6,7 @@ import time
 import numpy as np
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from datetime import date
 
 from dataset_multilingual import EurParallelDataset, collate_parallel
 from models.transceiver import DeepSC
@@ -396,6 +397,12 @@ def main():
     for parameter in transmitter.parameters():
         parameter.requires_grad = False
 
+
+    today = date.today()
+    root_dir = f'{args.save_lora}/{train_lag}/{today.strftime("%Y-%m-%d")}'
+
+    if not os.path.exists(root_dir):
+        os.makedirs(root_dir)
     
     for epoch in range(args.epochs):
 
@@ -426,9 +433,10 @@ def main():
         )
 
         save_epoch_results(
-            os.path.join(f'{args.save_lora}_{train_lag}', f'results_{train_lag}_24_07_2026.csv'),
+            os.path.join(root_dir, 'results.csv'),
             epoch,
-            {
+            {   
+                'epoch': epoch,
                 'loss': loss,
                 'val_loss': val_loss
             }
@@ -441,11 +449,11 @@ def main():
             save_language_adapter(
                 epoch=epoch,
                 model=LoRA,
-                save_dir=args.save_lora,
+                save_dir=root_dir,
                 adapter_name=f'{train_lag}_best',
                 optimizer=optimizer,
         )
-            print(f"Saved LoRA adapter to {args.save_lora}_{train_lag}")
+            print(f"Saved LoRA adapter to {root_dir}")
 
 
 if __name__ == "__main__":
