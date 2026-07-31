@@ -22,7 +22,6 @@ from models.tx_model import Transmitter
 from models.lora2 import (
     apply_lora_to_decoder,
     enable_language_adaptation,
-    adaptation_parameters,
     save_language_adapter,
 )
 
