@@ -119,7 +119,7 @@ def valid_sentence(sentence, min_len, max_len):
     return min_len <= n <= max_len
 
 
-def make_parallel_dataset(src_path, trg_path, token_to_idx, trg_lang, min_len, max_len):
+def make_parallel_dataset(src_lang, src_path, trg_path, token_to_idx, trg_lang, min_len, max_len):
     dataset = []
 
     for src_file, trg_file in paired_text_files(src_path, trg_path):
@@ -140,7 +140,7 @@ def make_parallel_dataset(src_path, trg_path, token_to_idx, trg_lang, min_len, m
             if not valid_sentence(trg, min_len, max_len):
                 continue
 
-            src_ids = encode_sentence(src, token_to_idx, "<EN>")
+            src_ids = encode_sentence(src, token_to_idx, f"<{src_lang.upper()}>")
             trg_ids = encode_sentence(trg, token_to_idx, f"<{trg_lang.upper()}>")
 
             dataset.append((src_ids, trg_ids))
@@ -169,6 +169,7 @@ def main():
     parser.add_argument("--pt-file", default="pt")
     parser.add_argument("--es-file", default="es")
     parser.add_argument("--fr-file", default="fr")
+    parser.add_argument("--src-lang", choices=["en", "pt", "es", "fr"], default="pt")
 
     parser.add_argument("--min-len", type=int, default=4)
     parser.add_argument("--max-len", type=int, default=30)
@@ -222,10 +223,10 @@ def main():
 
     # 3. Create EN→PT / EN→ES / EN→FR for LoRA
     datasets = {
-        "pt_pt": make_parallel_dataset(files["pt"], files["pt"], token_to_idx, "pt", args.min_len, args.max_len),
-        "pt_en": make_parallel_dataset(files["pt"], files["en"], token_to_idx, "en", args.min_len, args.max_len),
-        "pt_es": make_parallel_dataset(files["pt"], files["es"], token_to_idx, "es", args.min_len, args.max_len),
-        "pt_fr": make_parallel_dataset(files["pt"], files["fr"], token_to_idx, "fr", args.min_len, args.max_len),
+        "pt_pt": make_parallel_dataset(args.src_lang, files["pt"], files["pt"], token_to_idx, "pt", args.min_len, args.max_len),
+        "pt_en": make_parallel_dataset(args.src_lang, files["pt"], files["en"], token_to_idx, "en", args.min_len, args.max_len),
+        "pt_es": make_parallel_dataset(args.src_lang, files["pt"], files["es"], token_to_idx, "es", args.min_len, args.max_len),
+        "pt_fr": make_parallel_dataset(args.src_lang, files["pt"], files["fr"], token_to_idx, "fr", args.min_len, args.max_len),
     }
 
     for name, data in tqdm(datasets.items(), desc="Splitting and saving datasets"):
