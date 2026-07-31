@@ -226,6 +226,10 @@ def main():
     parser.add_argument('--en-es', default='en_es', type=str)
     parser.add_argument('--en-fr', default='en_fr', type=str)
 
+    parser.add_argument('--pt', default='pt_pt', type=str)
+    parser.add_argument('--pt-pt', default='pt_en', type=str)
+    parser.add_argument('--pt-es', default='pt_es', type=str)
+    parser.add_argument('--pt-fr', default='pt_fr', type=str)
 
     args = parser.parse_args()
 
@@ -238,7 +242,7 @@ def main():
     vocab_size = len(token_to_idx)
     pad_idx = token_to_idx["<PAD>"]
 
-    train_lag = args.en_fr
+    train_lag = args.pt_es
 
     dataset = EurParallelDataset(train_lag, 'train')
 
