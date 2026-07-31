@@ -195,7 +195,7 @@ def main():
     parser.add_argument("--vocab-file", default="data/train/europarl/vocab_multilingual.json")
     # parser.add_argument("--train-data", required=True)
     parser.add_argument("--student-checkpoint", default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd")
-    parser.add_argument("--transmitter-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/muiltilingual")
+    parser.add_argument("--transmitter-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual")
     parser.add_argument("--save-lora", default="./checkpoints/deepsc-Rayleigh/lora")
 
     parser.add_argument("--channel", default="Rayleigh", type=str, choices=["AWGN", "Rayleigh", "Rician"])
@@ -280,7 +280,7 @@ def main():
         0.1
     ).to(device)
 
-    enc_model_path = os.path.join(args.transmitter_checkpoint, 'encoder_200.pth')
+    enc_model_path = os.path.join(f'{args.transmitter_checkpoint}/2026-07-30', 'encoder_50.pth')
     # dec_model_path = 'decoder_20.pth'
     # student_path = 'checkpoints/tr_kd/student_tr_best.pth'
     student_1_path = os.path.join(args.student_checkpoint, 'student_1_tr_best.pth')
