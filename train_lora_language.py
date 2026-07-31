@@ -28,7 +28,7 @@ from utils import (
     save_epoch_results
 )
 
-def val_step(transmitter, LoRA, src, trg, n_var, pad, criterion, channel, noise_std):
+def val_step(transmitter, LoRA, src, trg, pad, criterion, channel, noise_std):
     channels = Channels()
     trg_inp = trg[:, :-1]
     trg_real = trg[:, 1:]
@@ -96,8 +96,17 @@ def validate(
         for src, trg in pbar:
             src = src.to(device)
             trg = trg.to(device)
-            loss = val_step(transmitter,LoRA, src, trg, 0.1, pad_idx,
-                             criterion, args.channel,noise_std)
+
+            loss = val_step(
+                    transmitter,
+                    LoRA, 
+                    src, 
+                    trg, 
+                    pad_idx,
+                    criterion, 
+                    args.channel,
+                    noise_std
+                )
 
             total += loss
             pbar.set_description(
@@ -206,11 +215,20 @@ def main():
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
     parser.add_argument("--epochs", default=50, type=int)
-    parser.add_argument("--batch-size", default=256, type=int)
+    parser.add_argument("--batch-size", default=126, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
-    parser.add_argument("--lora-rank", type=int, default=8)
+
+    parser.add_argument("--lora-r", type=int, default=8)
     parser.add_argument("--lora-alpha", type=float, default=16.0)
     parser.add_argument("--lora-dropout", type=float, default=0.05)
+    parser.add_argument("--lora-targets", nargs="+", 
+        default=[
+            "self_q",
+            "self_v",
+            "src_q",
+            "src_v",
+        ],
+    )
 
     parser.add_argument("--embedding-lr", type=float, default=2e-5)
     parser.add_argument("--output-lr", type=float, default=5e-5)
@@ -280,10 +298,12 @@ def main():
         0.1
     ).to(device)
 
-    enc_model_path = os.path.join(f'{args.transmitter_checkpoint}/2026-07-30', 'encoder_50.pth')
+    # enc_model_path = os.path.join(f'{args.transmitter_checkpoint}/2026-07-30', 'encoder_50.pth')
+    enc_model_path = 'encoder_47.pth'
     # dec_model_path = 'decoder_20.pth'
     # student_path = 'checkpoints/tr_kd/student_tr_best.pth'
-    student_1_path = os.path.join(args.student_checkpoint, 'student_1_tr_best.pth')
+    # student_1_path = os.path.join(args.student_checkpoint, 'student_1_tr_best.pth')
+    student_1_path = 'student_pt_best.pth'
     student_2_path = 'student_2_mult_best.pth'
 
     # enc_checkpoint = torch.load(os.path.join(my_vars.checkpoint_path, enc_model_path), map_location=device)
@@ -307,31 +327,27 @@ def main():
     # deepsc.channel_decoder.load_state_dict(dec_checkpoint['channel_decoder'])
     # deepsc.decoder.load_state_dict(dec_checkpoint['decoder'])
     # deepsc.dense.load_state_dict(dec_checkpoint['dense'])
-    r=8
-    alpha=16
-
-    for parameter in student.parameters():
-        parameter.requires_grad = False
 
     LoRA = apply_lora_to_decoder(
         student,
-        r=args.lora_rank,
+        r=args.lora_r,
         alpha=args.lora_alpha,
         dropout=args.lora_dropout,
-    )
+        target_modules=args.lora_targets,
+    ).to(device)
 
-    LoRA = enable_language_adaptation(
-        LoRA,
-        train_embedding=True,
-        train_output_head=True,
-        train_layer_norm=True,
-    )
+    # LoRA = enable_language_adaptation(
+    #     LoRA,
+    #     train_embedding=True,
+    #     train_output_head=True,
+    #     train_layer_norm=True,
+    # )
 
     for name, parameter in LoRA.named_parameters():
         if parameter.requires_grad:
             print("TRAINABLE:", name, tuple(parameter.shape))
 
-    LoRA = LoRA.to(device)
+    # LoRA = LoRA.to(device)
 
     # optimizer = torch.optim.Adam(lora_parameters(student), lr=args.lr)
 
