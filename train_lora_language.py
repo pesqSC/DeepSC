@@ -216,8 +216,8 @@ def main():
     parser.add_argument("--output-lr", type=float, default=5e-5)
     parser.add_argument("--norm-lr", type=float, default=2e-5)
 
-    parser.add_argument("--num-layers", default=6, type=int)
-    parser.add_argument("--num-heads", default=8, type=int)
+    parser.add_argument("--num-layers", default=12, type=int)
+    parser.add_argument("--num-heads", default=16, type=int)
     parser.add_argument("--d-model", default=128, type=int)
     parser.add_argument("--dff", default=512, type=int)
 
