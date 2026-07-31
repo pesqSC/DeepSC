@@ -298,12 +298,12 @@ def main():
         0.1
     ).to(device)
 
-    # enc_model_path = os.path.join(f'{args.transmitter_checkpoint}/2026-07-30', 'encoder_50.pth')
-    enc_model_path = 'encoder_47.pth'
+    enc_model_path = os.path.join(f'{args.transmitter_checkpoint}/2026-07-30', 'encoder_50.pth')
+    # enc_model_path = 'encoder_47.pth'
     # dec_model_path = 'decoder_20.pth'
     # student_path = 'checkpoints/tr_kd/student_tr_best.pth'
-    # student_1_path = os.path.join(args.student_checkpoint, 'student_1_tr_best.pth')
-    student_1_path = 'student_pt_best.pth'
+    student_1_path = os.path.join(args.student_checkpoint, 'student_1_tr_best.pth')
+    # student_1_path = 'student_pt_best.pth'
     student_2_path = 'student_2_mult_best.pth'
 
     # enc_checkpoint = torch.load(os.path.join(my_vars.checkpoint_path, enc_model_path), map_location=device)
