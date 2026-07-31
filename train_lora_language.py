@@ -243,7 +243,7 @@ def main():
     vocab_size = len(token_to_idx)
     pad_idx = token_to_idx["<PAD>"]
 
-    train_lag = args.pt_es
+    train_lag = args.pt_fr
 
     dataset = EurParallelDataset(train_lag, 'train')
 
