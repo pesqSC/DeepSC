@@ -36,7 +36,7 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 def validate(epoch, args, pad_idx, criterion, net):
-    test_eur = EurParallelDataset(args.pt, 'test')
+    test_eur = EurParallelDataset(args.en, 'test')
     test_iterator = DataLoader(test_eur, batch_size=args.batch_size, num_workers=0,
                                 pin_memory=True, collate_fn=collate_parallel)
     net.eval()
