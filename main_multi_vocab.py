@@ -66,7 +66,7 @@ def validate(epoch, args, pad_idx, criterion, net):
 
 
 def train(epoch, args, pad_idx, optimizer, criterion, net)->float:
-    train_eur= EurParallelDataset(args.pt, 'train')
+    train_eur= EurParallelDataset(args.en, 'train')
     train_iterator = DataLoader(train_eur, batch_size=args.batch_size, num_workers=0,
                                 pin_memory=True, collate_fn=collate_parallel)
     pbar = tqdm(train_iterator)
@@ -135,8 +135,8 @@ def main():
     parser.add_argument('--MIN-LENGTH', default=4, type=int)
     parser.add_argument('--d-model', default=128, type=int)
     parser.add_argument('--dff', default=512, type=int)
-    parser.add_argument('--num-layers', default=12, type=int)
-    parser.add_argument('--num-heads', default=16, type=int)
+    parser.add_argument('--num-layers', default=4, type=int)
+    parser.add_argument('--num-heads', default=8, type=int)
     parser.add_argument('--batch-size', default=128, type=int)
     parser.add_argument('--epochs', default=50, type=int) 
     parser.add_argument('--en', default='en_en', type=str)
