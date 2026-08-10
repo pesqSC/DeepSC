@@ -298,13 +298,6 @@ def train(
             label_smoothing=0.1,
         )
 
-        # s1_ce = loss_function(
-        #     s1_logits.contiguous().view(-1, s1_logits.size(-1)),
-        #     trg_real.contiguous().view(-1),
-        #     pad_idx,
-        #     criterion
-        # )
-
         kd = kd_kl_loss(s_logits, t_logits, trg_real, pad_idx, args.temperature)
 
         src_valid = (src != pad_idx).float()
@@ -316,18 +309,13 @@ def train(
             pad_idx=pad_idx,
         )
 
-        # feat = masked_ce_loss(s_ch_dec_out, rx_ch_dec_out.detach(), pad_idx)
-        # feat =  loss_function(
-        #     s_ch_dec_out.contiguous().view(-1, s_ch_dec_out.size(-1)), 
-        #     rx_ch_dec_out.detach().contiguous().view(-1), 
-        #     pad_idx, 
-        #     criterion
-        # )
+        weighted_ce = args.alpha * ce
+        weighted_kd = args.beta * kd
+        weighted_feat = args.gamma * feat
 
-        # feat = feature_distillation_loss(s_ch_dec_out, rx_ch_dec_out.detach(), trg_real, pad_idx)
+        loss = weighted_ce + weighted_kd + weighted_feat
 
-        # loss = args.alpha * ce + args.beta * kd + args.gamma * feat
-        loss = (args.alpha * ce) + (args.beta * kd) + args.gamma * feat
+        # loss = (args.alpha * ce) + (args.beta * kd) + args.gamma * feat
 
         loss.backward()
         
@@ -336,12 +324,11 @@ def train(
             # torch.nn.utils.clip_grad_norm_(student_2.parameters(), args.grad_clip)
         
         opt.step()
-        # opt_s_2.step()
 
         total_loss += float(loss.item())
-        total_ce += float(ce.item())
-        total_kd += float(kd.item())
-        total_feat += float(feat.item())
+        total_ce += float(weighted_ce.item())
+        total_kd += float(weighted_kd.item())
+        total_feat += float(weighted_feat.item())
         total_ce_ppl += float(ce_ppl)
 
         num_batches += 1
@@ -350,10 +337,10 @@ def train(
 
         pbar.set_postfix(
             Loss=f"{loss.item():.3f}",
-            CE=f"{ce.item():.3f}",
+            CE=f"{weighted_ce.item():.3f}",
             CE_PPL=f"{ce_ppl:.3f}",
-            KD=f"{kd.item():.3f}",
-            TF=f"{feat.item():.3f}"
+            KD=f"{weighted_kd.item():.3f}",
+            TF=f"{weighted_feat.item():.3f}"
         )
 
     n = len(train_loader)
@@ -532,6 +519,7 @@ def main():
             "ce": train_stats["ce"],
             "kd": train_stats["kd"],
             "tf": train_stats["feature"],
+            "ce_ppl": train_stats["ce_ppl"],
             "alpha": args.alpha,
             "beta": args.beta,
             "gamma": args.gamma,
