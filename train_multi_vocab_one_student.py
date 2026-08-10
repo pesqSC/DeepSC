@@ -49,7 +49,7 @@ def parse_args():
 
     # train
     parser.add_argument("--batch-size", type=int, default=126)
-    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
     parser.add_argument("--grad-clip", type=float, default=1.0)
@@ -474,7 +474,7 @@ def main():
         args.max_len, 
         args.max_len, 
         args.d_model, 
-        args.num_heads, 
+        4, 
         args.dff, 
         args.dropout
     ).to(device)
@@ -512,7 +512,7 @@ def main():
         train_stats = train(
             transmitter=transmitter, 
             teacher=receiver, 
-            students=student, 
+            student=student, 
             train_loader=train_loader, 
             optimizer=optimizer,
             pad_idx=pad_idx,
