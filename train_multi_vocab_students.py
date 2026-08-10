@@ -36,15 +36,15 @@ def parse_args():
 
     # files
     parser.add_argument("--vocab-file", type=str, default="./data/train/europarl/vocab_multilingual.json")
-    parser.add_argument("--teacher-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual/2026-07-30")
+    parser.add_argument("--teacher-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual/2026-08-09")
     parser.add_argument("--save-dir", type=str, default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd")
 
     # model config (must match teacher checkpoint)
     parser.add_argument("--max-len", type=int, default=33)
     parser.add_argument("--d-model", type=int, default=128)
     parser.add_argument("--dff", type=int, default=512)
-    parser.add_argument("--num-layers", type=int, default=12)
-    parser.add_argument("--num-heads", type=int, default=16)
+    parser.add_argument("--num-layers", type=int, default=4)
+    parser.add_argument("--num-heads", type=int, default=8)
     parser.add_argument("--dropout", type=float, default=0.1)
 
     # train
@@ -135,6 +135,8 @@ def train(
     args
     ):
     
+    today = date.today()
+    root_dir
     csv_path = "results/train_multi_students_results.csv"
 
     for p in teacher.parameters():
@@ -308,23 +310,23 @@ def train(
 
     n = len(train_loader)
 
-    epoch_metrics = {
-        "train_s1_loss": total_loss_s1 / max(num_batches, 1),
-        "train_s1_ce": total_ce_s1 / max(num_batches, 1),
-        "train_s1_kd": total_kd_s1 / max(num_batches, 1),
-        "train_s1_feature": total_feat_s1 / max(num_batches, 1),
+    # epoch_metrics = {
+    #     "train_s1_loss": total_loss_s1 / max(num_batches, 1),
+    #     "train_s1_ce": total_ce_s1 / max(num_batches, 1),
+    #     "train_s1_kd": total_kd_s1 / max(num_batches, 1),
+    #     "train_s1_feature": total_feat_s1 / max(num_batches, 1),
 
-        "alpha": args.alpha,
-        "beta": args.beta,
-        "gamma": args.gamma,
-        "temperature": args.temperature,
-    }
+    #     "alpha": args.alpha,
+    #     "beta": args.beta,
+    #     "gamma": args.gamma,
+    #     "temperature": args.temperature,
+    # }
 
-    save_epoch_results(
-        csv_path=csv_path,
-        epoch=epoch + 1,
-        metrics=epoch_metrics,
-    )
+    # save_epoch_results(
+    #     csv_path=csv_path,
+    #     epoch=epoch + 1,
+    #     metrics=epoch_metrics,
+    # )
 
     return [
         {
