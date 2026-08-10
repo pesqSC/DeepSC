@@ -583,10 +583,115 @@ def feature_distillation_loss(student_feat, teacher_feat, targets, pad_idx):
     
     return masked_loss
 
+# Feature Distillation Loss - Cosine Similarity
+def feature_distillation_loss_cosine(
+    student_feat: torch.Tensor,
+    teacher_feat: torch.Tensor,
+    targets: torch.Tensor,
+    pad_idx: int,
+    temperature: float = 1.0,
+    loss_scale: float = 1.0,
+) -> torch.Tensor:
+    """
+    Cosine similarity loss for feature-level distillation.
+    
+    Args:
+        student_feat: [B, T, D] student features
+        teacher_feat: [B, T, D] teacher features  
+        targets: [B, T] target tokens (for masking)
+        pad_idx: padding index
+        temperature: temperature scaling for cosine similarity
+        loss_scale: scaling factor for the loss
+    """
+    # Input validation
+    if student_feat.shape != teacher_feat.shape:
+        raise ValueError(
+            f"Feature shape mismatch: student={student_feat.shape}, "
+            f"teacher={teacher_feat.shape}"
+        )
+    
+    # Create mask [B, T]
+    mask = (targets != pad_idx)
+    num_valid = mask.sum()
+    
+    # Handle edge case: no valid tokens
+    if num_valid == 0:
+        return torch.tensor(0.0, device=student_feat.device, requires_grad=True)
+    
+    # Normalize features (L2 norm)
+    student_norm = F.normalize(student_feat, p=2, dim=-1)  # [B, T, D]
+    teacher_norm = F.normalize(teacher_feat, p=2, dim=-1)  # [B, T, D]
+    
+    # Compute cosine similarity: -1 to 1
+    # Loss = 1 - cosine_similarity (0 when aligned, 2 when opposite)
+    cosine_sim = (student_norm * teacher_norm).sum(dim=-1)  # [B, T]
+    
+    # Scale by temperature
+    cosine_loss = (1 - cosine_sim) / temperature  # [B, T]
+    
+    # Apply mask and average
+    masked_loss = (cosine_loss * mask).sum() / num_valid.float()
+    
+    return masked_loss * loss_scale
+
+# Feature Distillation Loss - Cosine Similarity - Normalized
+def feature_distillation_loss_cosine_normalized(
+    student_feat: torch.Tensor,
+    teacher_feat: torch.Tensor,
+    targets: torch.Tensor,
+    pad_idx: int,
+    eps: float = 1e-8,
+) -> torch.Tensor:
+    """
+    Cosine similarity loss with additional feature stabilization.
+    """
+    # Normalize with stability
+    student_norm = student_feat / (student_feat.norm(dim=-1, keepdim=True) + eps)
+    teacher_norm = teacher_feat / (teacher_feat.norm(dim=-1, keepdim=True) + eps)
+    
+    # Cosine similarity
+    cosine_sim = (student_norm * teacher_norm).sum(dim=-1)
+    
+    # MSE on cosine similarity (alternative formulation)
+    loss = F.mse_loss(cosine_sim, torch.ones_like(cosine_sim), reduction='none')
+    
+    mask = (targets != pad_idx)
+    return (loss * mask).sum() / mask.sum().float()
+
+
+# Logit Distillation Loss - Cosine Similarity
+def logit_distillation_loss_cosine(
+    student_logits: torch.Tensor,
+    teacher_logits: torch.Tensor,
+    targets: torch.Tensor,
+    pad_idx: int,
+    temperature: float = 4.0,
+) -> torch.Tensor:
+    """
+    Cosine similarity loss on softmax probabilities.
+    """
+    # Apply softmax with temperature
+    student_probs = F.softmax(student_logits / temperature, dim=-1)
+    teacher_probs = F.softmax(teacher_logits / temperature, dim=-1)
+    
+    # Normalize probabilities (L2 norm)
+    student_norm = F.normalize(student_probs, p=2, dim=-1)
+    teacher_norm = F.normalize(teacher_probs, p=2, dim=-1)
+    
+    # Cosine similarity
+    cosine_sim = (student_norm * teacher_norm).sum(dim=-1)
+    
+    # Mask and average
+    mask = (targets != pad_idx)
+    loss = ((1 - cosine_sim) * mask).sum() / mask.sum().float()
+    
+    return loss
+
 def masked_ce_loss(
     logits: torch.Tensor,
     targets: torch.Tensor,
     pad_idx: int,
+    label_smoothing: float = 0.0,
 ) -> torch.Tensor:
     """
     Token-level cross-entropy averaged over non-PAD positions.
@@ -611,19 +716,23 @@ def masked_ce_loss(
         )
 
     vocab_size = logits.size(-1)
+    flat_logits = logits.flatten(0, 1)
+    flat_targets = targets.flatten()
 
-    flat_targets = targets.reshape(-1)
-
-    token_loss = F.cross_entropy(
-        logits.reshape(-1, vocab_size),
+    ce_loss_raw = F.cross_entropy(
+        flat_logits,
         flat_targets,
         reduction="none",
         ignore_index=pad_idx,
+        label_smoothing=label_smoothing,
     )
 
-    valid = (flat_targets != pad_idx).to(token_loss.dtype)
+    n_valid = (flat_targets != pad_idx).to(ce_loss_raw.dtype)
+    avg_loss = ce_loss_raw.sum() / n_valid.clamp_min(1.0)
 
-    return (token_loss * valid).sum() / valid.sum().clamp_min(1.0)
+    perplexity = math.exp(avg_loss.detach().item())
+    
+    return avg_loss, perplexity
 
 def masked_ce_loss2(
     student_logits: torch.Tensor,
@@ -689,18 +798,25 @@ def kd_kl_loss(
 
     min_len = min(student_logits.size(1), teacher_logits.size(1), targets.size(1))
 
-    student_logits = student_logits[:, :min_len, :]
-    teacher_logits = teacher_logits[:, :min_len, :]
-    targets = targets[:, :min_len]
+    if student_logits.size(1) != min_len or teacher_logits.size(1) != min_len:
+        student_logits = student_logits[:, :min_len, :]
+        teacher_logits = teacher_logits[:, :min_len, :]
+        targets = targets[:, :min_len]
 
     # apply mask so PAD tokens don't dominate KD
     s_log_prob = F.log_softmax(student_logits / temperature, dim=-1)
     t_prob = F.softmax(teacher_logits / temperature, dim=-1)
 
-    kl = F.kl_div(s_log_prob, t_prob, reduction="none").sum(dim=-1)  # [B,T]
-    valid = (targets != pad_idx).float()
-    kl = (kl * valid).sum() / valid.sum().clamp_min(1.0)
-    return kl * (temperature ** 2)
+    kl_per_token = F.kl_div(s_log_prob, t_prob, reduction="none").sum(dim=-1)  # [B,T]
+
+    # Mask out padding positions and average over valid tokens
+    valid_mask = (targets != pad_idx).to(kl_per_token.dtype)
+    n_valid = valid_mask.sum().clamp_min(1.0)
+
+    masked_kl = (kl_per_token * valid_mask).sum() / n_valid
+
+    # Return average KL over valid tokens, scaled by temperature^2
+    return masked_kl * (temperature**2)
 
 
 def setup_seed(seed: int) -> None:
