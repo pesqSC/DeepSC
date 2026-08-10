@@ -799,6 +799,36 @@ def masked_ce_loss2(
 
     return loss
 
+# def kd_kl_loss(
+#     student_logits: torch.Tensor,
+#     teacher_logits: torch.Tensor,
+#     targets: torch.Tensor,
+#     pad_idx: int,
+#     temperature: float,
+# ) -> torch.Tensor:
+
+#     min_len = min(student_logits.size(1), teacher_logits.size(1), targets.size(1))
+
+#     if student_logits.size(1) != min_len or teacher_logits.size(1) != min_len:
+#         student_logits = student_logits[:, :min_len, :]
+#         teacher_logits = teacher_logits[:, :min_len, :]
+#         targets = targets[:, :min_len]
+
+#     # apply mask so PAD tokens don't dominate KD
+#     s_log_prob = F.log_softmax(student_logits / temperature, dim=-1)
+#     t_prob = F.softmax(teacher_logits / temperature, dim=-1)
+
+#     kl_per_token = F.kl_div(s_log_prob, t_prob, reduction="none").sum(dim=-1)  # [B,T]
+
+#     # Mask out padding positions and average over valid tokens
+#     valid_mask = (targets != pad_idx).to(kl_per_token.dtype)
+#     n_valid = valid_mask.sum().clamp_min(1.0)
+
+#     masked_kl = (kl_per_token * valid_mask).sum() / n_valid
+
+#     # Return average KL over valid tokens, scaled by temperature^2
+#     return masked_kl * (temperature**2)
+
 def kd_kl_loss(
     student_logits: torch.Tensor,
     teacher_logits: torch.Tensor,
@@ -806,29 +836,81 @@ def kd_kl_loss(
     pad_idx: int,
     temperature: float,
 ) -> torch.Tensor:
+    """
+    Knowledge-distillation KL divergence over non-PAD tokens.
 
-    min_len = min(student_logits.size(1), teacher_logits.size(1), targets.size(1))
+    student_logits: [B, T, V]
+    teacher_logits: [B, T, V]
+    targets:        [B, T]
+    """
 
-    if student_logits.size(1) != min_len or teacher_logits.size(1) != min_len:
-        student_logits = student_logits[:, :min_len, :]
-        teacher_logits = teacher_logits[:, :min_len, :]
-        targets = targets[:, :min_len]
+    if temperature <= 0:
+        raise ValueError(
+            f"temperature must be > 0, got {temperature}"
+        )
 
-    # apply mask so PAD tokens don't dominate KD
-    s_log_prob = F.log_softmax(student_logits / temperature, dim=-1)
-    t_prob = F.softmax(teacher_logits / temperature, dim=-1)
+    if student_logits.ndim != 3:
+        raise ValueError(
+            f"Expected student logits [B,T,V], "
+            f"got {student_logits.shape}"
+        )
 
-    kl_per_token = F.kl_div(s_log_prob, t_prob, reduction="none").sum(dim=-1)  # [B,T]
+    if teacher_logits.ndim != 3:
+        raise ValueError(
+            f"Expected teacher logits [B,T,V], "
+            f"got {teacher_logits.shape}"
+        )
 
-    # Mask out padding positions and average over valid tokens
-    valid_mask = (targets != pad_idx).to(kl_per_token.dtype)
+    if student_logits.shape != teacher_logits.shape:
+        raise ValueError(
+            f"Student/teacher shape mismatch: "
+            f"student={student_logits.shape}, "
+            f"teacher={teacher_logits.shape}"
+        )
+
+    if targets.ndim != 2:
+        raise ValueError(
+            f"Expected targets [B,T], got {targets.shape}"
+        )
+
+    if student_logits.shape[:2] != targets.shape:
+        raise ValueError(
+            f"Logits/targets shape mismatch: "
+            f"logits={student_logits.shape}, "
+            f"targets={targets.shape}"
+        )
+
+    T = float(temperature)
+
+    student_log_probs = F.log_softmax(
+        student_logits / T,
+        dim=-1,
+    )
+
+    with torch.no_grad():
+        teacher_probs = F.softmax(
+            teacher_logits / T,
+            dim=-1,
+        )
+
+    kl_per_token = F.kl_div(
+        student_log_probs,
+        teacher_probs,
+        reduction="none",
+    ).sum(dim=-1)
+
+    valid_mask = (targets != pad_idx).to(
+        kl_per_token.dtype
+    )
+
     n_valid = valid_mask.sum().clamp_min(1.0)
 
-    masked_kl = (kl_per_token * valid_mask).sum() / n_valid
+    kd_loss = (
+        (kl_per_token * valid_mask).sum()
+        / n_valid
+    )
 
-    # Return average KL over valid tokens, scaled by temperature^2
-    return masked_kl * (temperature**2)
-
+    return kd_loss * (T ** 2)
 
 def setup_seed(seed: int) -> None:
     torch.manual_seed(seed)
