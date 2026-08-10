@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument("--dropout", type=float, default=0.1)
 
     # train
-    parser.add_argument("--batch-size", type=int, default=60)
+    parser.add_argument("--batch-size", type=int, default=96)
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
@@ -326,7 +326,7 @@ def train(
         src_valid = (src != pad_idx).float()
 
         feat = feature_distillation_loss(
-            student_feat=s1_rx_ch,
+            student_feat=s_rx_ch,
             teacher_feat=t_rx_ch.detach(),
             targets=src,
             pad_idx=pad_idx,
