@@ -727,8 +727,10 @@ def masked_ce_loss(
         label_smoothing=label_smoothing,
     )
 
-    n_valid = (flat_targets != pad_idx).to(ce_loss_raw.dtype)
-    avg_loss = ce_loss_raw.sum() / n_valid.clamp_min(1.0)
+    valid = (flat_targets != pad_idx).to(ce_loss_raw.dtype)
+    n_valid = valid.sum().clamp_min(1.0)
+
+    avg_loss = (ce_loss_raw * n_valid ).sum() / n_valid
 
     perplexity = math.exp(avg_loss.detach().item())
     
