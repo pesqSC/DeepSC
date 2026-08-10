@@ -500,7 +500,7 @@ def main():
     os.makedirs(args.save_dir, exist_ok=True)
 
     today = date.today()
-    root_dir = os.path.join(args.save_dir,f'/one_student/{today.strftime("%Y-%m-%d")}')
+    root_dir = args.save_dir + f'/one_student/{today.strftime("%Y-%m-%d")}'
     
     os.makedirs(root_dir, exist_ok=True)
 
