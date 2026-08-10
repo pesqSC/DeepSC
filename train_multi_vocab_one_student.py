@@ -121,6 +121,7 @@ def validate_epoch(
     total_ce = 0.0
     total_kd = 0.0
     total_feat = 0.0
+    total_ce_ppl = 0.0
 
     pbar = tqdm(val_loader)
 
@@ -187,14 +188,16 @@ def validate_epoch(
             total_ce += float(args.alpha * ce.item())
             total_kd += float(args.beta * kd.item())
             total_feat += float(feat.item())
+            total_ce_ppl += float(ce_ppl)
 
             pbar.set_description(f"Epoch {epoch + 1} Valid")
 
             pbar.set_postfix(
                 Loss=f"{loss_s.item():.3f}",
                 CE=f"{ce.item():.3f}",
+                CE_PPL=f"{ce_ppl:.3f}",
                 KD=f"{kd.item():.3f}",
-                FEAT=f"{feat.item():.3f}"
+                FEAT=f"{feat.item():.3f}",
             )
 
     n = max(len(val_loader), 1)
@@ -339,7 +342,7 @@ def train(
         total_ce += float(ce.item())
         total_kd += float(kd.item())
         total_feat += float(feat.item())
-        total_ce_ppl += float(ce_ppl.item())
+        total_ce_ppl += float(ce_ppl)
 
         num_batches += 1
 
@@ -348,6 +351,7 @@ def train(
         pbar.set_postfix(
             Loss=f"{loss.item():.3f}",
             CE=f"{ce.item():.3f}",
+            CE_PPL=f"{ce_ppl:.3f}",
             KD=f"{kd.item():.3f}",
             TF=f"{feat.item():.3f}"
         )
