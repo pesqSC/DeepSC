@@ -68,9 +68,9 @@ def parse_args():
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
     # KD
-    parser.add_argument("--temperature", type=float, default=3.0)
-    parser.add_argument("--alpha", type=float, default=0.5, help="CE weight")
-    parser.add_argument("--beta", type=float, default=0.5, help="KD weight")
+    parser.add_argument("--temperature", type=float, default=2.0)
+    parser.add_argument("--alpha", type=float, default=0.6, help="CE weight")
+    parser.add_argument("--beta", type=float, default=0.3, help="KD weight")
     parser.add_argument("--gamma", type=float, default=0.1, help="Feature MSE weight")
     parser.add_argument("--init-student-from-teacher", action="store_true")
     parser.add_argument('--en', default='en_en', type=str)
@@ -182,22 +182,26 @@ def validate_epoch(
                 pad_idx=pad_idx,
             )
 
-            loss_s = (args.alpha * ce) + (args.beta * kd) + args.gamma * feat
+            weighted_ce = args.alpha * ce
+            weighted_kd = args.beta * kd
+            weighted_feat = args.gamma * feat
 
-            total_loss += float(loss_s.item())
-            total_ce += float(args.alpha * ce.item())
-            total_kd += float(args.beta * kd.item())
+            loss = weighted_ce + weighted_kd + weighted_feat
+
+            total_loss += float(loss.item())
+            total_ce += float(ce.item())
+            total_kd += float(kd.item())
             total_feat += float(feat.item())
             total_ce_ppl += float(ce_ppl)
 
             pbar.set_description(f"Epoch {epoch + 1} Valid")
 
             pbar.set_postfix(
-                Loss=f"{loss_s.item():.3f}",
-                CE=f"{ce.item():.3f}",
+                Loss=f"{loss.item():.3f}",
+                CE=f"{weighted_ce.item():.3f}",
                 CE_PPL=f"{ce_ppl:.3f}",
-                KD=f"{kd.item():.3f}",
-                FEAT=f"{feat.item():.3f}",
+                KD=f"{weighted_kd.item():.3f}",
+                FEAT=f"{weighted_feat.item():.3f}",
             )
 
     n = max(len(val_loader), 1)
@@ -326,9 +330,9 @@ def train(
         opt.step()
 
         total_loss += float(loss.item())
-        total_ce += float(weighted_ce.item())
-        total_kd += float(weighted_kd.item())
-        total_feat += float(weighted_feat.item())
+        total_ce += float(ce.item())
+        total_kd += float(kd.item())
+        total_feat += float(feat.item())
         total_ce_ppl += float(ce_ppl)
 
         num_batches += 1
@@ -518,7 +522,7 @@ def main():
             "val_loss": val_stats["loss"],
             "ce": train_stats["ce"],
             "kd": train_stats["kd"],
-            "tf": train_stats["feature"],
+            "tf": train_stats["tf"],
             "ce_ppl": train_stats["ce_ppl"],
             "alpha": args.alpha,
             "beta": args.beta,
