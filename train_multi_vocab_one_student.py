@@ -22,12 +22,15 @@ from models.rx_model import Receiver
 from models.tx_model import Transmitter
 from utils import create_masks, loss_function, validate_multi_epoch, save_student_receiver
 from utils import (
+    SNR_to_noise, 
     kd_kl_loss, 
     masked_ce_loss, 
+    save_epoch_results,
     feature_distillation_loss, 
-    SNR_to_noise, 
-    masked_ce_loss2,
-    save_epoch_results
+    feature_distillation_loss_cosine,
+    feature_distillation_loss_cosine_normalized,
+    logit_distillation_loss_cosine,
+    masked_ce_loss2
 )
 
 
@@ -49,7 +52,7 @@ def parse_args():
 
     # train
     parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
     parser.add_argument("--grad-clip", type=float, default=1.0)
@@ -232,6 +235,7 @@ def train(
     total_ce = 0.0
     total_kd = 0.0
     total_feat = 0.0
+    total_ce_ppl = 0.0
 
     num_batches=0.0
 
@@ -283,10 +287,11 @@ def train(
             src_mask
         )
 
-        ce = masked_ce_loss(
+        ce, ce_ppl = masked_ce_loss(
             s_logits,
             trg_real,
-            pad_idx
+            pad_idx,
+            label_smoothing=0.1,
         )
 
         # s1_ce = loss_function(
@@ -333,7 +338,8 @@ def train(
         total_ce += float(ce.item())
         total_kd += float(kd.item())
         total_feat += float(feat.item())
-        
+        total_ce_ppl += float(ce_ppl.item())
+
         num_batches += 1
 
         pbar.set_description(f"Epoch {epoch + 1} Train")
@@ -351,7 +357,8 @@ def train(
             "loss": total_loss / n,
             "ce": total_ce / n,
             "kd": total_kd / n,
-            "tf": total_feat / n
+            "tf": total_feat / n,
+            "ce_ppl": total_ce_ppl / n
         }
 
 def main():
@@ -502,7 +509,7 @@ def main():
             epoch=epoch,
             transmitter=transmitter, 
             teacher=receiver, 
-            students=student, 
+            student=student, 
             val_loader=val_loader, 
             pad_idx=pad_idx,
             device=device,
