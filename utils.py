@@ -731,7 +731,7 @@ def masked_ce_loss(
     n_valid = valid.sum().clamp_min(1.0)
 
 
-    avg_loss = (ce_loss_raw * n_valid ).sum() / n_valid
+    avg_loss = (ce_loss_raw * valid ).sum() / n_valid
 
     # Convert scalar loss to float
     loss_val = avg_loss.detach().item()
