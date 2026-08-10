@@ -182,7 +182,6 @@ def validate_epoch(
                 trg_real,
                 pad_idx
             )
-            
 
             # ce = masked_ce_loss(s_logits, trg_real, pad_idx)
             # ce_s1 = loss_function(
@@ -191,7 +190,6 @@ def validate_epoch(
             #     pad_idx, 
             #     criterion
             # )
-
 
             kd = kd_kl_loss(s_logits, t_logits, trg_real, pad_idx, args.temperature)
 
@@ -211,7 +209,6 @@ def validate_epoch(
             total_kd += float(args.beta * kd.item())
             total_feat += float(feat.item())
 
-
             pbar.set_description(f"Epoch {epoch + 1} Valid")
 
             pbar.set_postfix(
@@ -221,8 +218,8 @@ def validate_epoch(
                 FEAT=f"{feat.item():.3f}"
             )
 
-
     n = max(len(val_loader), 1)
+
     return{
         "loss": total_loss / n,
         "ce": total_ce / n,
@@ -375,8 +372,6 @@ def train(
 
     n = len(train_loader)
 
-    
-
     return {
             "loss": total_loss / n,
             "ce": total_ce / n,
@@ -484,7 +479,6 @@ def main():
         args.dropout
     ).to(device)
 
-
     # noise_std = snr_db_to_noise_std(float(args.snr_db))
     noise_std = np.random.uniform(
             SNR_to_noise(args.snr_db_low), 
@@ -502,6 +496,8 @@ def main():
         )
     
     best_val = float("inf")
+
+    os.makedirs(args.save_dir, exist_ok=True)
 
     today = date.today()
     root_dir = os.path.join(args.save_dir,f'/one_student/{today.strftime("%Y-%m-%d")}')
