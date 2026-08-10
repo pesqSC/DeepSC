@@ -730,9 +730,18 @@ def masked_ce_loss(
     valid = (flat_targets != pad_idx).to(ce_loss_raw.dtype)
     n_valid = valid.sum().clamp_min(1.0)
 
+
     avg_loss = (ce_loss_raw * n_valid ).sum() / n_valid
 
-    perplexity = math.exp(avg_loss.detach().item())
+    # Convert scalar loss to float
+    loss_val = avg_loss.detach().item()
+
+    if math.isnan(loss_val) or math.isinf(loss_val):
+        perplexity = float("inf")
+    else:
+        # Clamp exponent input to avoid math.exp overflow
+        clamped_loss = min(loss_val, 700.0)
+        perplexity = math.exp(clamped_loss)
     
     return avg_loss, perplexity
 
