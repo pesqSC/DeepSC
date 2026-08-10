@@ -95,31 +95,6 @@ def snr_db_to_noise_std(snr_db: float) -> float:
     # assuming unit power
     return 10 ** (-snr_db / 20.0)
 
-# def train_step():
-
-def validate(epoch, args, pad_idx, criterion, net, device):
-    test_eur = EurParallelDataset(args.en, 'test')
-    test_iterator = DataLoader(test_eur, batch_size=args.batch_size, num_workers=0,
-                                pin_memory=True, collate_fn=collate_parallel)
-    net.eval()
-    pbar = tqdm(test_iterator)
-    total = 0
-    with torch.no_grad():
-        for src, trg in pbar:
-            src = src.to(device)
-            trg = trg.to(device)
-            loss = val_step(net, src, trg, 0.1, pad_idx,
-                             criterion, args.channel)
-
-            total += loss
-            pbar.set_description(
-                'Epoch: {}; Type: VAL; Loss: {:.5f}'.format(
-                    epoch + 1, loss
-                )
-            )
-
-    return total/len(test_iterator)
-
 @torch.no_grad()
 def validate_epoch(
     epoch,
@@ -213,8 +188,8 @@ def validate_epoch(
 
             pbar.set_postfix(
                 Loss=f"{loss_s.item():.3f}",
-                CE=f"{s_ce.item():.3f}",
-                KD=f"{kd_s.item():.3f}",
+                CE=f"{ce.item():.3f}",
+                KD=f"{kd.item():.3f}",
                 FEAT=f"{feat.item():.3f}"
             )
 
@@ -224,7 +199,7 @@ def validate_epoch(
         "loss": total_loss / n,
         "ce": total_ce / n,
         "kd": total_kd / n,
-        "feat": total_feat / n,
+        "tf": total_feat / n,
     }
 
 
@@ -308,7 +283,7 @@ def train(
             src_mask
         )
 
-        s_ce = masked_ce_loss(
+        ce = masked_ce_loss(
             s_logits,
             trg_real,
             pad_idx
@@ -348,7 +323,7 @@ def train(
         loss.backward()
         
         if args.grad_clip is not None and args.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(student_1.parameters(), args.grad_clip)
+            torch.nn.utils.clip_grad_norm_(student.parameters(), args.grad_clip)
             # torch.nn.utils.clip_grad_norm_(student_2.parameters(), args.grad_clip)
         
         opt.step()
@@ -578,7 +553,7 @@ def main():
 
         # save the best student model        
         if val_stats["loss"] < best_val:
-            best_val[i] = val_stats[i]["loss"]
+            best_val = val_stats["loss"]
 
             best_path = os.path.join(
                 root_dir,
