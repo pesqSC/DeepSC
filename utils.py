@@ -538,12 +538,14 @@ def validate_multi_epoch(
         "ce": total_ce_s1 / n,
         "kd": total_kd_s1 / n,
         # "feat": total_feat / n,
-    }, {
-        "loss": total_loss_s2 / n,
-        "ce": total_ce_s2 / n,
-        "kd": total_kd_s2 / n,
-        # "feat": total_feat / n,
-    }]
+    }
+    #, {
+    #     "loss": total_loss_s2 / n,
+    #     "ce": total_ce_s2 / n,
+    #     "kd": total_kd_s2 / n,
+    #     # "feat": total_feat / n,
+    # }
+    ]
 
 
 # -----------------------------
