@@ -155,10 +155,11 @@ def validate_epoch(
                 src_mask
             )
 
-            ce = masked_ce_loss(
+            ce, ce_ppl = masked_ce_loss(
                 s_logits,
                 trg_real,
-                pad_idx
+                pad_idx,
+                label_smoothing=0.1
             )
 
             # ce = masked_ce_loss(s_logits, trg_real, pad_idx)
