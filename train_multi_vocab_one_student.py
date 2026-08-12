@@ -185,7 +185,7 @@ def validate_epoch(
             feat = feature_distillation_loss_cosine_normalized(
                 student_feat=s_dec_out, 
                 teacher_feat=rx_dec_out.detach(), 
-                targets=src,
+                targets=trg_real,
                 pad_idx=pad_idx,
                 eps=1e-8
             )
@@ -314,11 +314,19 @@ def train(
 
         src_valid = (src != pad_idx).float()
 
-        feat = feature_distillation_loss(
-            student_feat=s_rx_ch,
-            teacher_feat=t_rx_ch.detach(),
-            targets=src,
+        # feat = feature_distillation_loss(
+        #     student_feat=s_rx_ch,
+        #     teacher_feat=t_rx_ch.detach(),
+        #     targets=src,
+        #     pad_idx=pad_idx,
+        # )
+
+        feat = feature_distillation_loss_cosine_normalized(
+            student_feat=s_dec_out, 
+            teacher_feat=t_rx_ch.detach(), 
+            targets=trg_real,
             pad_idx=pad_idx,
+            eps=1e-8
         )
 
         weighted_ce = args.alpha * ce
