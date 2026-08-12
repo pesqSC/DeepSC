@@ -289,7 +289,7 @@ def train(
                 noise_std
             )
             
-            t_logits, t_rx_ch, _ = teacher(
+            t_logits, t_rx_ch, t_rx_dec = teacher(
                 z_noisy=z_noisy, 
                 trg_inp=trg_inp, 
                 look_ahead_mask=look_ahead_mask,
@@ -323,7 +323,7 @@ def train(
 
         feat = feature_distillation_loss_cosine_normalized(
             student_feat=s_dec_out, 
-            teacher_feat=t_rx_ch.detach(), 
+            teacher_feat=t_rx_dec.detach(), 
             targets=trg_real,
             pad_idx=pad_idx,
             eps=1e-8
