@@ -175,11 +175,20 @@ def validate_epoch(
 
             src_valid = (src != pad_idx).float()
 
-            feat = feature_distillation_loss(
-                student_feat=s_ch_dec_out, 
-                teacher_feat=rx_ch_dec_out.detach(), 
+            # feat = feature_distillation_loss(
+            #     student_feat=s_ch_dec_out, 
+            #     teacher_feat=rx_ch_dec_out.detach(), 
+            #     targets=src,
+            #     pad_idx=pad_idx,
+            # )
+
+            feat = feature_distillation_loss_cosine(
+                student_feat=s_dec_out, 
+                teacher_feat=rx_dec_out.detach(), 
                 targets=src,
                 pad_idx=pad_idx,
+                temperature=args.temperature
+                
             )
 
             weighted_ce = args.alpha * ce
