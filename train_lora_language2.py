@@ -211,7 +211,7 @@ def main():
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
     parser.add_argument("--epochs", default=10, type=int)
-    parser.add_argument("--batch-size", default=64, type=int)
+    parser.add_argument("--batch-size", default=128, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
 
     # Adapter hyperparameters
@@ -375,7 +375,7 @@ def main():
 
         # Step learning rate scheduler per epoch
         scheduler.step()
-        
+
         save_epoch_results(
             os.path.join(root_dir, 'results.csv'),
             epoch,
