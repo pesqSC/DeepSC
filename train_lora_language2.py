@@ -391,7 +391,7 @@ def main():
                 model=LoRA,
                 save_dir=root_dir,
                 adapter_name=f'{train_lag}_best',
-                scheduler=None,
+                optimizer=None,
             )
             print(f"[*] New best validation loss: {val_loss:.5f}. Adapter saved to {root_dir}")
         
@@ -400,7 +400,7 @@ def main():
             model=LoRA,
             save_dir=root_dir,
             adapter_name="latest_resume",
-            scheduler=scheduler
+            optimizer=optimizer
         )
 
 
