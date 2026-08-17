@@ -204,7 +204,17 @@ def main():
     parser.add_argument("--lora-r", type=int, default=8)
     parser.add_argument("--lora-alpha", type=float, default=16.0)
     parser.add_argument("--lora-dropout", type=float, default=0.05)
-    parser.add_argument("--lora-targets", nargs="+", default=["self_q", "self_v","self_out", "src_q", "src_v", "src_out"])
+    parser.add_argument("--lora-targets", nargs="+", default=[
+                                                        "self_q", 
+                                                        "self_k",
+                                                        "self_v",
+                                                        "self_out", 
+                                                        "src_q",
+                                                        "src_k", 
+                                                        "src_v", 
+                                                        "src_out"
+                                                    ])
+
     parser.add_argument("--adapt-heads-and-norms", action="store_true", help="Unfreeze Embeddings, Output Head, and LayerNorms alongside LoRA")
 
     parser.add_argument("--embedding-lr", type=float, default=2e-5)
