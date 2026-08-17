@@ -13,6 +13,7 @@ import time
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from torch.optim import AdamW
 from w3lib.html import remove_tags
 from nltk.translate.bleu_score import sentence_bleu
 from models.mutual_info import sample_batch, mutual_information
@@ -950,3 +951,68 @@ def save_epoch_results(csv_path, epoch, metrics):
             writer.writeheader()
 
         writer.writerow(row)
+
+def build_differential_optimizer(
+    model: nn.Module,
+    lr_lora: float = 1e-3,
+    lr_head_embed: float = 5e-5,
+    lr_norm: float = 5e-5,
+    weight_decay: float = 0.01,
+) -> AdamW:
+    """
+    Constructs an AdamW optimizer with distinct learning rate groups:
+      1. LoRA adapter matrices (A & B) -> higher LR, standard weight decay
+      2. Embeddings & Output Dense weight -> lower LR, standard weight decay
+      3. Biases & LayerNorm parameters -> lower LR, zero weight decay
+    """
+    lora_params = []
+    head_embed_params = []
+    no_decay_params = []
+
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+
+        # 1. Zero weight-decay group: LayerNorms and all Biases
+        if param.ndim <= 1 or "layernorm" in name.lower() or name.endswith(".bias"):
+            no_decay_params.append(param)
+        
+        # 2. LoRA parameters
+        elif "lora_" in name:
+            lora_params.append(param)
+            
+        # 3. Vocabulary Embeddings and Output Head weights
+        elif "embedding" in name.lower() or "dense.weight" in name:
+            head_embed_params.append(param)
+            
+        # Fallback for any other trainable weights
+        else:
+            lora_params.append(param)
+
+    param_groups = [
+        {
+            "params": lora_params,
+            "lr": lr_lora,
+            "weight_decay": weight_decay,
+            "name": "lora_adapters",
+        },
+        {
+            "params": head_embed_params,
+            "lr": lr_head_embed,
+            "weight_decay": weight_decay,
+            "name": "embeddings_and_head",
+        },
+        {
+            "params": no_decay_params,
+            "lr": lr_norm,
+            "weight_decay": 0.0,
+            "name": "no_decay_norms_biases",
+        },
+    ]
+
+    # Verification log
+    for group in param_groups:
+        count = sum(p.numel() for p in group["params"])
+        print(f"[Optimizer Group: {group['name']}] Params: {count:,} | LR: {group['lr']} | WD: {group['weight_decay']}")
+
+    return AdamW(param_groups)

@@ -26,7 +26,8 @@ from utils import (
     setup_seed, 
     loss_function,
     Channels,
-    save_epoch_results
+    save_epoch_results,
+    build_differential_optimizer
 )
 
 
@@ -206,16 +207,12 @@ def main():
     parser.add_argument("--lora-dropout", type=float, default=0.05)
     parser.add_argument("--lora-targets", nargs="+", default=[
                                                         "self_q", 
-                                                        "self_k",
                                                         "self_v",
-                                                        "self_out", 
                                                         "src_q",
-                                                        "src_k", 
                                                         "src_v", 
-                                                        "src_out"
                                                     ])
 
-    parser.add_argument("--adapt-heads-and-norms", action="store_true", help="Unfreeze Embeddings, Output Head, and LayerNorms alongside LoRA")
+    parser.add_argument("--adapt-heads-and-norms", action="store_true", default=True, help="Unfreeze Embeddings, Output Head, and LayerNorms alongside LoRA")
 
     parser.add_argument("--embedding-lr", type=float, default=2e-5)
     parser.add_argument("--output-lr", type=float, default=5e-5)
@@ -317,32 +314,39 @@ def main():
         )
 
     # Build Optimizer Parameter Groups
-    lora_params, embedding_params, output_params, norm_params = [], [], [], []
+    # lora_params, embedding_params, output_params, norm_params = [], [], [], []
 
-    for name, parameter in LoRA.named_parameters():
-        if not parameter.requires_grad:
-            continue
+    # for name, parameter in LoRA.named_parameters():
+    #     if not parameter.requires_grad:
+    #         continue
 
-        if "lora_" in name:
-            lora_params.append(parameter)
-        elif name.startswith("decoder.embedding"):
-            embedding_params.append(parameter)
-        elif name.startswith("dense"):
-            output_params.append(parameter)
-        elif "layernorm" in name:
-            norm_params.append(parameter)
+    #     if "lora_" in name:
+    #         lora_params.append(parameter)
+    #     elif name.startswith("decoder.embedding"):
+    #         embedding_params.append(parameter)
+    #     elif name.startswith("dense"):
+    #         output_params.append(parameter)
+    #     elif "layernorm" in name:
+    #         norm_params.append(parameter)
 
-    parameter_groups = []
-    if lora_params:
-        parameter_groups.append({"params": lora_params, "lr": args.lr, "name": "lora"})
-    if embedding_params:
-        parameter_groups.append({"params": embedding_params, "lr": args.embedding_lr, "name": "embedding"})
-    if output_params:
-        parameter_groups.append({"params": output_params, "lr": args.output_lr, "name": "output"})
-    if norm_params:
-        parameter_groups.append({"params": norm_params, "lr": args.norm_lr, "name": "layernorm"})
+    # parameter_groups = []
+    # if lora_params:
+    #     parameter_groups.append({"params": lora_params, "lr": args.lr, "name": "lora"})
+    # if embedding_params:
+    #     parameter_groups.append({"params": embedding_params, "lr": args.embedding_lr, "name": "embedding"})
+    # if output_params:
+    #     parameter_groups.append({"params": output_params, "lr": args.output_lr, "name": "output"})
+    # if norm_params:
+    #     parameter_groups.append({"params": norm_params, "lr": args.norm_lr, "name": "layernorm"})
 
-    optimizer = torch.optim.AdamW(parameter_groups, weight_decay=1e-4)
+    # optimizer = torch.optim.AdamW(parameter_groups, weight_decay=1e-4)
+    optimizer = build_differential_optimizer(
+        model=LoRA,
+        lr_lora=args.lr,
+        lr_head_embed=args.embedding_lr,
+        lr_norm=args.norm_lr,
+        weight_decay=1e-4
+    )
 
     # Setup directories
     today = date.today()
