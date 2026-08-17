@@ -21,6 +21,6 @@ checkpoints/
 europarl.tgz
 .continue/
 *.pth
-results/*
-student/*
+results
+student
 *.txt
