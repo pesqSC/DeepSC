@@ -935,7 +935,7 @@ def save_epoch_results(csv_path, epoch, metrics):
     os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
 
     row = {
-        "epoch": epoch,
+        "epoch": epoch+1,
         **metrics,
     }
 
