@@ -117,7 +117,7 @@ def train_lora_epoch(
     transmitter, 
     LoraModel, 
     loader, 
-    optimizer, 
+    scheduler,
     device, 
     pad_idx,
     criterion,
@@ -128,6 +128,9 @@ def train_lora_epoch(
     
     total_loss = 0.0
     num_batches = 0
+
+    # Cache trainable parameters for gradient clipping
+    trainable_params = [p for p in LoraModel.parameters() if p.requires_grad]
 
     pbar = tqdm(loader, desc=f"Epoch {epoch + 1} Train")
 
@@ -143,7 +146,7 @@ def train_lora_epoch(
         snr_db = np.random.uniform(args.snr_db_low, args.snr_db_high)
         noise_std = SNR_to_noise(snr_db)
 
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
         # Frozen Transmitter Forward Pass
         with torch.no_grad():
@@ -173,9 +176,9 @@ def train_lora_epoch(
         loss.backward()
         
         # Optional Gradient Clipping to prevent explosion
-        torch.nn.utils.clip_grad_norm_(LoraModel.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
         
-        optimizer.step()
+        scheduler.step()
 
         total_loss += loss.item()
         num_batches += 1
@@ -187,9 +190,19 @@ def train_lora_epoch(
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--vocab-file", default="data/train/europarl/vocab_multilingual.json")
-    parser.add_argument("--student-checkpoint", default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd/one_student/2026-08-12")
-    parser.add_argument("--transmitter-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual/2026-08-09")
+    parser.add_argument(
+        "--vocab-file", 
+        default="data/train/europarl/vocab_multilingual.json"
+    )
+    parser.add_argument(
+        "--student-checkpoint", 
+        default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd/one_student/2026-08-12"
+    )
+    parser.add_argument(
+        "--transmitter-checkpoint", 
+        type=str, 
+        default="./checkpoints/deepsc-Rayleigh/multilingual/2026-08-09"
+    )
     parser.add_argument("--save-lora", default="./checkpoints/deepsc-Rayleigh/lora")
 
     parser.add_argument("--channel", default="Rayleigh", type=str, choices=["AWGN", "Rayleigh", "Rician"])
@@ -205,14 +218,19 @@ def main():
     parser.add_argument("--lora-r", type=int, default=8)
     parser.add_argument("--lora-alpha", type=float, default=16.0)
     parser.add_argument("--lora-dropout", type=float, default=0.05)
-    parser.add_argument("--lora-targets", nargs="+", default=[
-                                                        "self_q", 
-                                                        "self_v",
-                                                        "src_q",
-                                                        "src_v", 
-                                                    ])
+    parser.add_argument(
+        "--lora-targets", 
+        nargs="+", 
+        default=["self_q","self_v","src_q","src_v"],
+        help="Targets to apply LoRA to"
+    )
 
-    parser.add_argument("--adapt-heads-and-norms", action="store_true", default=True, help="Unfreeze Embeddings, Output Head, and LayerNorms alongside LoRA")
+    parser.add_argument(
+        "--adapt-heads-and-norms", 
+        action="store_true", 
+        default=True, 
+        help="Unfreeze Embeddings, Output Head, and LayerNorms alongside LoRA"
+    )
 
     parser.add_argument("--embedding-lr", type=float, default=2e-5)
     parser.add_argument("--output-lr", type=float, default=5e-5)
@@ -231,7 +249,7 @@ def main():
     parser.add_argument('--en-fr', default='en_fr', type=str)
 
     parser.add_argument('--pt', default='pt_pt', type=str)
-    parser.add_argument('--pt-pt', default='pt_en', type=str)
+    parser.add_argument('--pt-en', default='pt_en', type=str)
     parser.add_argument('--pt-es', default='pt_es', type=str)
     parser.add_argument('--pt-fr', default='pt_fr', type=str)
 
@@ -313,39 +331,18 @@ def main():
             train_layer_norm=True,
         )
 
-    # Build Optimizer Parameter Groups
-    # lora_params, embedding_params, output_params, norm_params = [], [], [], []
-
-    # for name, parameter in LoRA.named_parameters():
-    #     if not parameter.requires_grad:
-    #         continue
-
-    #     if "lora_" in name:
-    #         lora_params.append(parameter)
-    #     elif name.startswith("decoder.embedding"):
-    #         embedding_params.append(parameter)
-    #     elif name.startswith("dense"):
-    #         output_params.append(parameter)
-    #     elif "layernorm" in name:
-    #         norm_params.append(parameter)
-
-    # parameter_groups = []
-    # if lora_params:
-    #     parameter_groups.append({"params": lora_params, "lr": args.lr, "name": "lora"})
-    # if embedding_params:
-    #     parameter_groups.append({"params": embedding_params, "lr": args.embedding_lr, "name": "embedding"})
-    # if output_params:
-    #     parameter_groups.append({"params": output_params, "lr": args.output_lr, "name": "output"})
-    # if norm_params:
-    #     parameter_groups.append({"params": norm_params, "lr": args.norm_lr, "name": "layernorm"})
-
-    # optimizer = torch.optim.AdamW(parameter_groups, weight_decay=1e-4)
     optimizer = build_differential_optimizer(
         model=LoRA,
         lr_lora=args.lr,
         lr_head_embed=args.embedding_lr,
         lr_norm=args.norm_lr,
         weight_decay=1e-4
+    )
+    
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=num_epochs,
+        eta_min=1e-6
     )
 
     # Setup directories
@@ -359,7 +356,15 @@ def main():
 
     for epoch in range(args.epochs):
         loss = train_lora_epoch(
-            epoch, transmitter, LoRA, loader, optimizer, device, pad_idx, criterion, args
+            epoch, 
+            transmitter, 
+            LoRA, 
+            loader, 
+            scheduler,
+            device, 
+            pad_idx, 
+            criterion, 
+            args
         )
 
         val_loss = validate(
@@ -371,19 +376,29 @@ def main():
         save_epoch_results(
             os.path.join(root_dir, 'results.csv'),
             epoch,
-            {'epoch': epoch, 'loss': loss, 'val_loss': val_loss}
+            {'epoch': epoch+1, 'loss': loss, 'val_loss': val_loss}
         )
 
         if val_loss < best_val_loss:
+
             best_val_loss = val_loss
+            
             save_language_adapter(
                 epoch=epoch,
                 model=LoRA,
                 save_dir=root_dir,
                 adapter_name=f'{train_lag}_best',
-                optimizer=optimizer,
+                scheduler=None,
             )
             print(f"[*] New best validation loss: {val_loss:.5f}. Adapter saved to {root_dir}")
+        
+        save_language_adapter(
+            epoch=epoch,
+            model=LoRA,
+            save_dir=root_dir,
+            adapter_name="latest_resume",
+            scheduler=scheduler
+        )
 
 
 if __name__ == "__main__":
