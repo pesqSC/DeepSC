@@ -187,8 +187,8 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--vocab-file", default="data/train/europarl/vocab_multilingual.json")
-    parser.add_argument("--student-checkpoint", default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd")
-    parser.add_argument("--transmitter-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual")
+    parser.add_argument("--student-checkpoint", default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd/one_student/2026-08-12")
+    parser.add_argument("--transmitter-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual/2026-08-09")
     parser.add_argument("--save-lora", default="./checkpoints/deepsc-Rayleigh/lora")
 
     parser.add_argument("--channel", default="Rayleigh", type=str, choices=["AWGN", "Rayleigh", "Rician"])
@@ -196,8 +196,8 @@ def main():
     parser.add_argument("--snr-db-high", type=float, default=10.0)
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
-    parser.add_argument("--epochs", default=50, type=int)
-    parser.add_argument("--batch-size", default=126, type=int)
+    parser.add_argument("--epochs", default=10, type=int)
+    parser.add_argument("--batch-size", default=64, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
 
     # Adapter hyperparameters
@@ -211,12 +211,21 @@ def main():
     parser.add_argument("--output-lr", type=float, default=5e-5)
     parser.add_argument("--norm-lr", type=float, default=2e-5)
 
-    parser.add_argument("--num-layers", default=12, type=int)
-    parser.add_argument("--num-heads", default=16, type=int)
+    parser.add_argument("--num-layers", default=4, type=int)
+    parser.add_argument("--num-heads", default=8, type=int)
     parser.add_argument("--d-model", default=128, type=int)
     parser.add_argument("--dff", default=512, type=int)
 
     parser.add_argument('--MAX_LEN', default=33, type=int)
+
+    parser.add_argument('--en', default='en_en', type=str)
+    parser.add_argument('--en-pt', default='en_pt', type=str)
+    parser.add_argument('--en-es', default='en_es', type=str)
+    parser.add_argument('--en-fr', default='en_fr', type=str)
+
+    parser.add_argument('--pt', default='pt_pt', type=str)
+    parser.add_argument('--pt-pt', default='pt_en', type=str)
+    parser.add_argument('--pt-es', default='pt_es', type=str)
     parser.add_argument('--pt-fr', default='pt_fr', type=str)
 
     args = parser.parse_args()
@@ -229,7 +238,7 @@ def main():
     vocab_size = len(token_to_idx)
     pad_idx = token_to_idx["<PAD>"]
 
-    train_lag = args.pt_fr
+    train_lag = args.en_pt
     dataset = EurParallelDataset(train_lag, 'train')
 
     loader = DataLoader(
@@ -250,14 +259,20 @@ def main():
     transmitter = Transmitter(deepsc.encoder, deepsc.channel_encoder).to(device)
 
     student = Student(
-        2, vocab_size, vocab_size, 
-        args.MAX_LEN, args.MAX_LEN, args.d_model, 
-        args.num_heads, args.dff, 0.1
+        2, 
+        vocab_size,
+        vocab_size, 
+        args.MAX_LEN,
+        args.MAX_LEN, 
+        args.d_model, 
+        4, 
+        args.dff, 
+        0.1
     ).to(device)
 
     # Load Weights
-    enc_model_path = os.path.join(f'{args.transmitter_checkpoint}/2026-07-30', 'encoder_50.pth')
-    student_1_path = os.path.join(args.student_checkpoint, 'student_1_tr_best.pth')
+    enc_model_path = os.path.join(args.transmitter_checkpoint, 'encoder_35.pth')
+    student_1_path = os.path.join(args.student_checkpoint, 'student_03.pth')
 
     enc_checkpoint = torch.load(enc_model_path, map_location=device)
     transmitter.encoder.load_state_dict(enc_checkpoint['encoder'])
