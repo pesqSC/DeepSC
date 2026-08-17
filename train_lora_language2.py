@@ -117,7 +117,7 @@ def train_lora_epoch(
     transmitter, 
     LoraModel, 
     loader, 
-    scheduler,
+    optimizer,
     device, 
     pad_idx,
     criterion,
@@ -178,7 +178,7 @@ def train_lora_epoch(
         # Optional Gradient Clipping to prevent explosion
         torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
         
-        scheduler.step()
+        optimizer.step()
 
         total_loss += loss.item()
         num_batches += 1
@@ -360,7 +360,7 @@ def main():
             transmitter, 
             LoRA, 
             loader, 
-            scheduler,
+            optimizer,
             device, 
             pad_idx, 
             criterion, 
@@ -373,6 +373,9 @@ def main():
             noise_std=val_noise_std, train_lag=train_lag
         )
 
+        # Step learning rate scheduler per epoch
+        scheduler.step()
+        
         save_epoch_results(
             os.path.join(root_dir, 'results.csv'),
             epoch,
