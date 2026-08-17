@@ -341,7 +341,7 @@ def main():
     
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        T_max=num_epochs,
+        T_max=args.epochs,
         eta_min=1e-6
     )
 
