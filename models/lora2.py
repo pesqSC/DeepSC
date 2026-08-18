@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 class LoRALinear(nn.Module):
     """
     LoRA wrapper around an nn.Linear layer.
@@ -352,6 +351,696 @@ def save_language_adapter(
         f"[Saver] LoRA tensors: {len(lora_keys)}"
     )
     return save_path
+
+
+def load_language_adapter_auto(
+    model: nn.Module,
+    path: str,
+    device,
+    apply_lora_fn,
+    optimizer=None,
+    scheduler=None,
+    strict_adapter: bool = True,
+    verbose: bool = True,
+):
+    """
+    Automatically load a saved language adapter.
+
+    This function:
+
+      1. Loads the adapter checkpoint.
+      2. Reads the saved LoRA configuration.
+      3. Automatically injects LoRA into the base model.
+      4. Validates adapter parameter names and tensor shapes.
+      5. Loads:
+           - LoRA A/B matrices
+           - optional embedding
+           - optional output head
+           - optional LayerNorm parameters
+      6. Optionally restores optimizer and scheduler state.
+
+    IMPORTANT
+    ---------
+    `model` must be the SAME base student architecture/checkpoint
+    that was used before LoRA fine-tuning.
+
+    Example:
+
+        lora_pt = copy.deepcopy(student1)
+
+        lora_pt = load_language_adapter_auto(
+            model=lora_pt,
+            path=adapter_path_pt,
+            device=device,
+            apply_lora_fn=apply_lora_to_decoder,
+        )
+
+        lora_pt.eval()
+    """
+
+    # =========================================================
+    # 1. Check checkpoint path
+    # =========================================================
+
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"Adapter checkpoint not found:\n{path}"
+        )
+
+    # =========================================================
+    # 2. Load checkpoint
+    # =========================================================
+
+    checkpoint = torch.load(
+        path,
+        map_location=device,
+        weights_only=False,
+    )
+
+    if not isinstance(checkpoint, dict):
+        raise RuntimeError(
+            f"Invalid checkpoint format in:\n{path}"
+        )
+
+    # =========================================================
+    # 3. Read state dictionary
+    # =========================================================
+
+    state_dict = checkpoint.get(
+        "model_state_dict",
+        checkpoint,
+    )
+
+    if not isinstance(state_dict, dict) or not state_dict:
+        raise RuntimeError(
+            f"Invalid or empty adapter state dictionary in:\n{path}"
+        )
+
+    # =========================================================
+    # 4. Read saved metadata
+    # =========================================================
+
+    saved_epoch = checkpoint.get(
+        "epoch",
+        None,
+    )
+
+    adapter_name = checkpoint.get(
+        "adapter_name",
+        None,
+    )
+
+    lora_config = checkpoint.get(
+        "lora_config",
+        None,
+    )
+
+    extra_info = checkpoint.get(
+        "extra_info",
+        {},
+    )
+
+    # =========================================================
+    # 5. LoRA config is required for automatic loading
+    # =========================================================
+
+    if lora_config is None:
+        raise RuntimeError(
+            "\nThis checkpoint does not contain 'lora_config'.\n\n"
+            "Automatic LoRA injection is therefore impossible.\n"
+            "For old checkpoints, manually call "
+            "apply_lora_to_decoder(...) before loading."
+        )
+
+    # =========================================================
+    # 6. Extract LoRA configuration
+    # =========================================================
+
+    required_config = [
+        "r",
+        "alpha",
+        "dropout",
+        "targets",
+    ]
+
+    missing_config = [
+        key
+        for key in required_config
+        if key not in lora_config
+    ]
+
+    if missing_config:
+        raise RuntimeError(
+            "Incomplete LoRA configuration in checkpoint.\n"
+            f"Missing fields: {missing_config}"
+        )
+
+    lora_r = int(
+        lora_config["r"]
+    )
+
+    lora_alpha = float(
+        lora_config["alpha"]
+    )
+
+    lora_dropout = float(
+        lora_config["dropout"]
+    )
+
+    lora_targets = list(
+        lora_config["targets"]
+    )
+
+    # =========================================================
+    # 7. Sanity checks
+    # =========================================================
+
+    if lora_r <= 0:
+        raise RuntimeError(
+            f"Invalid LoRA rank: {lora_r}"
+        )
+
+    if lora_alpha <= 0:
+        raise RuntimeError(
+            f"Invalid LoRA alpha: {lora_alpha}"
+        )
+
+    if not 0.0 <= lora_dropout < 1.0:
+        raise RuntimeError(
+            f"Invalid LoRA dropout: {lora_dropout}"
+        )
+
+    if not lora_targets:
+        raise RuntimeError(
+            "LoRA target module list is empty."
+        )
+
+    # =========================================================
+    # 8. Make sure model does not already contain LoRA
+    # =========================================================
+
+    existing_lora = [
+        name
+        for name, _ in model.named_parameters()
+        if "lora_" in name
+    ]
+
+    if existing_lora:
+        raise RuntimeError(
+            "\nThe supplied model already contains LoRA parameters.\n"
+            "load_language_adapter_auto() expects the ORIGINAL "
+            "base student before LoRA injection.\n\n"
+            "Example:\n"
+            "    lora_pt = copy.deepcopy(student1)\n"
+            "    lora_pt = load_language_adapter_auto(...)\n"
+        )
+
+    # =========================================================
+    # 9. Automatically inject LoRA
+    # =========================================================
+
+    model = apply_lora_fn(
+        model,
+        r=lora_r,
+        alpha=lora_alpha,
+        dropout=lora_dropout,
+        target_modules=lora_targets,
+    )
+
+    model = model.to(device)
+
+    # =========================================================
+    # 10. Get current model state
+    # =========================================================
+
+    model_state = model.state_dict()
+
+    # =========================================================
+    # 11. Check adapter keys
+    # =========================================================
+
+    unknown_keys = [
+        key
+        for key in state_dict
+        if key not in model_state
+    ]
+
+    if unknown_keys:
+
+        message = (
+            "Adapter contains parameters that do not exist "
+            "in the current model:\n"
+        )
+
+        message += "\n".join(
+            f"  - {key}"
+            for key in unknown_keys
+        )
+
+        if strict_adapter:
+            raise RuntimeError(message)
+
+        if verbose:
+            print("\n[Loader] WARNING")
+            print(message)
+
+    # =========================================================
+    # 12. Check tensor shapes
+    # =========================================================
+
+    shape_errors = []
+
+    for key, tensor in state_dict.items():
+
+        if key not in model_state:
+            continue
+
+        expected_shape = tuple(
+            model_state[key].shape
+        )
+
+        checkpoint_shape = tuple(
+            tensor.shape
+        )
+
+        if checkpoint_shape != expected_shape:
+
+            shape_errors.append(
+                (
+                    key,
+                    checkpoint_shape,
+                    expected_shape,
+                )
+            )
+
+    if shape_errors:
+
+        message = [
+            "Adapter parameter shape mismatch:"
+        ]
+
+        for (
+            key,
+            checkpoint_shape,
+            model_shape,
+        ) in shape_errors:
+
+            message.append(
+                f"  - {key}\n"
+                f"      checkpoint: {checkpoint_shape}\n"
+                f"      model     : {model_shape}"
+            )
+
+        raise RuntimeError(
+            "\n".join(message)
+        )
+
+    # =========================================================
+    # 13. Find LoRA tensors
+    # =========================================================
+
+    lora_keys = [
+        key
+        for key in state_dict
+        if "lora_" in key
+    ]
+
+    if not lora_keys:
+        raise RuntimeError(
+            "Checkpoint contains no LoRA tensors."
+        )
+
+    lora_a_keys = [
+        key
+        for key in lora_keys
+        if key.endswith("lora_A")
+    ]
+
+    lora_b_keys = [
+        key
+        for key in lora_keys
+        if key.endswith("lora_B")
+    ]
+
+    # =========================================================
+    # 14. Check A/B count
+    # =========================================================
+
+    if len(lora_a_keys) != len(lora_b_keys):
+        raise RuntimeError(
+            "Invalid LoRA checkpoint.\n"
+            f"lora_A tensors: {len(lora_a_keys)}\n"
+            f"lora_B tensors: {len(lora_b_keys)}"
+        )
+
+    # =========================================================
+    # 15. Verify every A has matching B
+    # =========================================================
+
+    for a_key in lora_a_keys:
+
+        prefix = a_key[:-len("lora_A")]
+
+        b_key = (
+            prefix
+            + "lora_B"
+        )
+
+        if b_key not in state_dict:
+            raise RuntimeError(
+                "Incomplete LoRA pair:\n"
+                f"  A: {a_key}\n"
+                f"  Missing B: {b_key}"
+            )
+
+    # =========================================================
+    # 16. Load adapter weights
+    # =========================================================
+
+    result = model.load_state_dict(
+        state_dict,
+        strict=False,
+    )
+
+    # =========================================================
+    # 17. Unexpected keys
+    # =========================================================
+
+    if result.unexpected_keys:
+
+        message = (
+            "Unexpected keys while loading adapter:\n"
+        )
+
+        message += "\n".join(
+            f"  - {key}"
+            for key in result.unexpected_keys
+        )
+
+        if strict_adapter:
+            raise RuntimeError(message)
+
+        if verbose:
+            print(
+                "\n[Loader] WARNING"
+            )
+            print(message)
+
+    # =========================================================
+    # 18. Missing keys
+    #
+    # Missing base-model weights are EXPECTED because
+    # adapter checkpoints only contain adapted parameters.
+    # =========================================================
+
+    missing_adapter_keys = []
+
+    for key in lora_keys:
+
+        if key in result.missing_keys:
+            missing_adapter_keys.append(
+                key
+            )
+
+    if missing_adapter_keys:
+
+        raise RuntimeError(
+            "Some LoRA parameters were not loaded:\n"
+            + "\n".join(
+                f"  - {key}"
+                for key in missing_adapter_keys
+            )
+        )
+
+    # =========================================================
+    # 19. Restore optimizer
+    # =========================================================
+
+    optimizer_loaded = False
+
+    if optimizer is not None:
+
+        optimizer_state = checkpoint.get(
+            "optimizer_state_dict",
+            None,
+        )
+
+        if optimizer_state is not None:
+
+            optimizer.load_state_dict(
+                optimizer_state
+            )
+
+            optimizer_loaded = True
+
+        elif verbose:
+
+            print(
+                "[Loader] WARNING: optimizer was provided "
+                "but optimizer_state_dict was not saved."
+            )
+
+    # =========================================================
+    # 20. Restore scheduler
+    # =========================================================
+
+    scheduler_loaded = False
+
+    if scheduler is not None:
+
+        scheduler_state = checkpoint.get(
+            "scheduler_state_dict",
+            None,
+        )
+
+        if scheduler_state is not None:
+
+            scheduler.load_state_dict(
+                scheduler_state
+            )
+
+            scheduler_loaded = True
+
+        elif verbose:
+
+            print(
+                "[Loader] WARNING: scheduler was provided "
+                "but scheduler_state_dict was not saved."
+            )
+
+    # =========================================================
+    # 21. Statistics
+    # =========================================================
+
+    total_tensors = len(
+        state_dict
+    )
+
+    total_parameters = sum(
+        tensor.numel()
+        for tensor in state_dict.values()
+    )
+
+    embedding_keys = [
+        key
+        for key in state_dict
+        if "embedding" in key.lower()
+    ]
+
+    dense_keys = [
+        key
+        for key in state_dict
+        if key.startswith("dense.")
+    ]
+
+    norm_keys = [
+        key
+        for key in state_dict
+        if "layernorm" in key.lower()
+    ]
+
+    # =========================================================
+    # 22. Verify saved counts
+    # =========================================================
+
+    expected_num_tensors = checkpoint.get(
+        "num_adapter_tensors"
+    )
+
+    expected_num_parameters = checkpoint.get(
+        "num_adapter_parameters"
+    )
+
+    if (
+        expected_num_tensors is not None
+        and expected_num_tensors != total_tensors
+    ):
+        raise RuntimeError(
+            "Adapter tensor-count verification failed.\n"
+            f"Saved value : {expected_num_tensors}\n"
+            f"Actual value: {total_tensors}"
+        )
+
+    if (
+        expected_num_parameters is not None
+        and expected_num_parameters != total_parameters
+    ):
+        raise RuntimeError(
+            "Adapter parameter-count verification failed.\n"
+            f"Saved value : {expected_num_parameters:,}\n"
+            f"Actual value: {total_parameters:,}"
+        )
+
+    # =========================================================
+    # 23. Print report
+    # =========================================================
+
+    if verbose:
+
+        print(
+            "\n"
+            + "=" * 70
+        )
+
+        print(
+            "Language Adapter Loaded"
+        )
+
+        print(
+            "=" * 70
+        )
+
+        print(
+            f"Checkpoint       : {path}"
+        )
+
+        print(
+            f"Adapter name     : {adapter_name}"
+        )
+
+        print(
+            f"Training epoch   : {saved_epoch}"
+        )
+
+        # -----------------------------------------------------
+        # LoRA configuration
+        # -----------------------------------------------------
+
+        print(
+            "\nLoRA configuration"
+        )
+
+        print(
+            f"  Rank           : {lora_r}"
+        )
+
+        print(
+            f"  Alpha          : {lora_alpha}"
+        )
+
+        print(
+            f"  Scaling        : "
+            f"{lora_alpha / lora_r:.4f}"
+        )
+
+        print(
+            f"  Dropout        : {lora_dropout}"
+        )
+
+        print(
+            f"  Targets        : "
+            f"{lora_targets}"
+        )
+
+        # -----------------------------------------------------
+        # Adapter tensors
+        # -----------------------------------------------------
+
+        print(
+            "\nAdapter parameters"
+        )
+
+        print(
+            f"  Total tensors  : "
+            f"{total_tensors}"
+        )
+
+        print(
+            f"  Parameters     : "
+            f"{total_parameters:,}"
+        )
+
+        print(
+            f"  LoRA tensors   : "
+            f"{len(lora_keys)}"
+        )
+
+        print(
+            f"    lora_A       : "
+            f"{len(lora_a_keys)}"
+        )
+
+        print(
+            f"    lora_B       : "
+            f"{len(lora_b_keys)}"
+        )
+
+        print(
+            f"  Embedding      : "
+            f"{len(embedding_keys)}"
+        )
+
+        print(
+            f"  Dense          : "
+            f"{len(dense_keys)}"
+        )
+
+        print(
+            f"  LayerNorm      : "
+            f"{len(norm_keys)}"
+        )
+
+        # -----------------------------------------------------
+        # Extra metadata
+        # -----------------------------------------------------
+
+        if extra_info:
+
+            print(
+                "\nExtra information"
+            )
+
+            for key, value in extra_info.items():
+
+                print(
+                    f"  {key:<18}: {value}"
+                )
+
+        # -----------------------------------------------------
+        # Resume status
+        # -----------------------------------------------------
+
+        if optimizer is not None:
+
+            print(
+                f"\nOptimizer loaded : "
+                f"{optimizer_loaded}"
+            )
+
+        if scheduler is not None:
+
+            print(
+                f"Scheduler loaded : "
+                f"{scheduler_loaded}"
+            )
+
+        print(
+            "=" * 70
+            + "\n"
+        )
+
+    return model
+
 
 def load_language_adapter(
     model: nn.Module,
