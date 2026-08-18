@@ -216,7 +216,7 @@ def main():
     parser.add_argument("--snr-db-high", type=float, default=10.0)
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
-    parser.add_argument("--epochs", default=10, type=int)
+    parser.add_argument("--epochs", default=30, type=int)
     parser.add_argument("--batch-size", default=128, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
 
@@ -227,7 +227,7 @@ def main():
     parser.add_argument(
         "--lora-targets", 
         nargs="+", 
-        default=["self_q","self_v","src_q","src_v"],
+        default=["self_q","self_v","self_out","src_q","src_v","src_out"],
         help="Targets to apply LoRA to"
     )
 

@@ -1054,8 +1054,8 @@ def load_language_adapter(
     checkpoint = torch.load(path, map_location=device)
     state_dict = checkpoint.get("model_state_dict", checkpoint)
 
-    for name, tensor in state_dict.items():
-        print(name, tensor.shape)
+    # for name, tensor in state_dict.items():
+    #     print(name, tensor.shape)
 
     if not isinstance(state_dict, dict) or not state_dict:
         raise RuntimeError(f"Invalid or empty checkpoint state dictionary in {path}")
