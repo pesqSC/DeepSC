@@ -54,11 +54,11 @@ def val_step(transmitter, LoRA, src, trg, pad, criterion, channel, noise_std):
         )
 
     ntokens = logits.size(-1)
-    loss = loss_function(
-        logits.contiguous().view(-1, ntokens), 
-        trg_real.contiguous().view(-1), 
-        pad, 
-        criterion
+    loss, ppl = masked_ce_loss(
+            logits=logits,
+            targets=trg_real,
+            pad_idx=pad_idx,
+            label_smoothing=0.0,
     )
     
     return loss.item()
