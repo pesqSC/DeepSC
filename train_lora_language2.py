@@ -27,7 +27,8 @@ from utils import (
     loss_function,
     Channels,
     save_epoch_results,
-    build_differential_optimizer
+    build_differential_optimizer,
+    masked_ce_loss
 )
 
 
@@ -166,13 +167,18 @@ def train_lora_epoch(
         )
 
         ntokens = logits.size(-1)
-        loss = loss_function(
-            logits.contiguous().view(-1, ntokens), 
-            trg_real.contiguous().view(-1), 
-            pad_idx, 
-            criterion
+        # loss = loss_function(
+        #     logits.contiguous().view(-1, ntokens), 
+        #     trg_real.contiguous().view(-1), 
+        #     pad_idx, 
+        #     criterion
+        # )
+        loss, ppl = masked_ce_loss(
+            logits=logits,
+            targets=trg_real,
+            pad_idx=pad_idx,
+            label_smoothing=0.0,
         )
-
         loss.backward()
         
         # Optional Gradient Clipping to prevent explosion
