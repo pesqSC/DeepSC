@@ -219,7 +219,7 @@ def save_language_adapter(
     model: nn.Module,
     save_dir: str,
     adapter_name: str,
-    scheduler=None,
+    optimizer=None,
     extra_info=None,
 ):
     """Save only the adaptation parameters (LoRA + unfrozen headers/norms)."""
@@ -248,7 +248,7 @@ def save_language_adapter(
     }
 
     if optimizer is not None:
-        checkpoint["scheduler_state_dict"] = scheduler.state_dict()
+        checkpoint["optimizer_state_dict"] = optimizer.state_dict()
     if extra_info is not None:
         checkpoint["extra_info"] = extra_info
 
