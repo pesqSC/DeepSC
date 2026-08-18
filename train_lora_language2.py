@@ -398,6 +398,18 @@ def main():
                 save_dir=root_dir,
                 adapter_name=f'{train_lag}_best',
                 optimizer=None,
+                scheduler=None,
+                lora_config={
+                    'r': args.lora_r,
+                    'alpha': args.lora_alpha,
+                    'dropout': args.lora_dropout,
+                    'target': args.lora_targets,
+                },
+                extra_info={
+                    'embedding_lr': args.embedding_lr,
+                    'norm_lr': args.norm_lr,
+                    'lr': args.lr,
+                }
             )
             print(f"[*] New best validation loss: {val_loss:.5f}. Adapter saved to {root_dir}")
         
@@ -406,7 +418,19 @@ def main():
             model=LoRA,
             save_dir=root_dir,
             adapter_name="latest_resume",
-            optimizer=optimizer
+            optimizer=optimizer,
+            scheduler=scheduler,
+            lora_config={
+                'r': args.lora_r,
+                'alpha': args.lora_alpha,
+                'dropout': args.lora_dropout,
+                'target': args.lora_targets,
+            },
+            extra_info={
+                'embedding_lr': args.embedding_lr,
+                'norm_lr': args.norm_lr,
+                'lr': args.lr,
+            }
         )
 
 
