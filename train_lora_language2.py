@@ -32,11 +32,11 @@ from utils import (
 )
 
 
-def val_step(transmitter, LoRA, src, trg, pad, criterion, channel, noise_std):
+def val_step(transmitter, LoRA, src, trg, pad_idx, criterion, channel, noise_std):
     trg_inp = trg[:, :-1]
     trg_real = trg[:, 1:]
 
-    src_mask, look_ahead_mask = create_masks(src, trg_inp, pad)
+    src_mask, look_ahead_mask = create_masks(src, trg_inp, pad_idx)
     
     with torch.no_grad():
         _, _, _, z_noisy = transmitter(
