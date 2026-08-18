@@ -214,20 +214,81 @@ def enable_language_adaptation(
     return model
 
 
+# def save_language_adapter(
+#     epoch: int,
+#     model: nn.Module,
+#     save_dir: str,
+#     adapter_name: str,
+#     optimizer=None,
+#     extra_info=None,
+# ):
+#     """Save only the adaptation parameters (LoRA + unfrozen headers/norms)."""
+#     os.makedirs(save_dir, exist_ok=True)
+#     save_path = os.path.join(save_dir, f"student_adapter_{adapter_name}_{epoch + 1:02d}.pth")
+
+#     trainable_names = {
+#         name for name, param in model.named_parameters() if param.requires_grad
+#     }
+
+#     adaptation_state = {
+#         name: tensor.detach().cpu()
+#         for name, tensor in model.state_dict().items()
+#         if name in trainable_names
+#     }
+
+#     if not adaptation_state:
+#         raise RuntimeError("No trainable parameters found to save!")
+
+#     checkpoint = {
+#         "epoch": epoch + 1,
+#         "adapter_name": adapter_name,
+#         "model_state_dict": adaptation_state,
+#         "num_adapter_tensors": len(adaptation_state),
+#         "num_adapter_parameters": sum(t.numel() for t in adaptation_state.values()),
+#     }
+
+#     if optimizer is not None:
+#         checkpoint["optimizer_state_dict"] = optimizer.state_dict()
+#     if extra_info is not None:
+#         checkpoint["extra_info"] = extra_info
+
+#     torch.save(checkpoint, save_path)
+#     print(f"[Saver] Adapter saved successfully to: {save_path}")
+#     return save_path
+
 def save_language_adapter(
     epoch: int,
     model: nn.Module,
     save_dir: str,
     adapter_name: str,
     optimizer=None,
+    scheduler=None,
     extra_info=None,
+    lora_config=None,
 ):
-    """Save only the adaptation parameters (LoRA + unfrozen headers/norms)."""
+    """
+    Save all trainable adaptation parameters:
+      - LoRA matrices
+      - optional decoder embedding
+      - optional output head
+      - optional LayerNorms
+    """
+
     os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, f"student_adapter_{adapter_name}_{epoch + 1:02d}.pth")
+
+    if adapter_name == "latest_resume":
+        filename = f"student_adapter_{adapter_name}.pth"
+    else:
+        filename = (
+            f"student_adapter_{adapter_name}_{epoch + 1:02d}.pth"
+        )
+
+    save_path = os.path.join(save_dir, filename)
 
     trainable_names = {
-        name for name, param in model.named_parameters() if param.requires_grad
+        name
+        for name, param in model.named_parameters()
+        if param.requires_grad
     }
 
     adaptation_state = {
@@ -237,25 +298,60 @@ def save_language_adapter(
     }
 
     if not adaptation_state:
-        raise RuntimeError("No trainable parameters found to save!")
+        raise RuntimeError(
+            "No trainable adaptation parameters found to save."
+        )
+
+    lora_keys = [
+        name
+        for name in adaptation_state
+        if "lora_" in name
+    ]
+
+    if not lora_keys:
+        raise RuntimeError(
+            "No LoRA parameters found in adaptation checkpoint."
+        )
 
     checkpoint = {
         "epoch": epoch + 1,
         "adapter_name": adapter_name,
         "model_state_dict": adaptation_state,
         "num_adapter_tensors": len(adaptation_state),
-        "num_adapter_parameters": sum(t.numel() for t in adaptation_state.values()),
+        "num_adapter_parameters": sum(
+            tensor.numel()
+            for tensor in adaptation_state.values()
+        ),
     }
 
+    if lora_config is not None:
+        checkpoint["lora_config"] = lora_config
+
     if optimizer is not None:
-        checkpoint["optimizer_state_dict"] = optimizer.state_dict()
+        checkpoint["optimizer_state_dict"] = (
+            optimizer.state_dict()
+        )
+
+    if scheduler is not None:
+        checkpoint["scheduler_state_dict"] = (
+            scheduler.state_dict()
+        )
+
     if extra_info is not None:
         checkpoint["extra_info"] = extra_info
 
     torch.save(checkpoint, save_path)
-    print(f"[Saver] Adapter saved successfully to: {save_path}")
-    return save_path
 
+    print(
+        f"[Saver] Adapter saved: {save_path}"
+    )
+    print(
+        f"[Saver] Tensors: {len(adaptation_state)}"
+    )
+    print(
+        f"[Saver] LoRA tensors: {len(lora_keys)}"
+    )
+    return save_path
 
 def load_language_adapter(
     model: nn.Module,
