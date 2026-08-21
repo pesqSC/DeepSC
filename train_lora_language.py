@@ -78,15 +78,15 @@ def validate(
     test_eur = EurParallelDataset(train_lag, 'test')
 
     test_iterator = DataLoader(
-                        test_eur, 
-                        batch_size=args.batch_size, 
-                        num_workers=0,
-                        pin_memory=True, 
-                        collate_fn=lambda batch: collate_parallel(
-                            batch,
-                            pad_idx,
-                        )
-                    )
+        test_eur, 
+        batch_size=args.batch_size, 
+        num_workers=0,
+        pin_memory=True, 
+        collate_fn=lambda batch: collate_parallel(
+            batch,
+            pad_idx,
+        )
+    )
 
     transmitter.eval()
 
