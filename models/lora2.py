@@ -480,7 +480,7 @@ def load_language_adapter_auto(
         "r",
         "alpha",
         "dropout",
-        "targets",
+        "target",
     ]
 
     missing_config = [
@@ -508,7 +508,7 @@ def load_language_adapter_auto(
     )
 
     lora_targets = list(
-        lora_config["targets"]
+        lora_config["target"]
     )
 
     # =========================================================
