@@ -222,8 +222,8 @@ def main():
 
     # Adapter hyperparameters
     parser.add_argument("--lora-r", type=int, default=8)
-    parser.add_argument("--lora-alpha", type=float, default=16.0)
-    parser.add_argument("--lora-dropout", type=float, default=0.05)
+    parser.add_argument("--lora-alpha", type=float, default=16)
+    parser.add_argument("--lora-dropout", type=float, default=0.0)
     parser.add_argument(
         "--lora-targets", 
         nargs="+", 
@@ -332,8 +332,8 @@ def main():
     if args.adapt_heads_and_norms:
         LoRA = enable_language_adaptation(
             LoRA,
-            train_embedding=True,
-            train_output_head=True,
+            train_embedding=False,
+            train_output_head=False,
             train_layer_norm=True,
         )
 
