@@ -398,19 +398,13 @@ def load_language_adapter_auto(
         lora_pt.eval()
     """
 
-    # =========================================================
     # 1. Check checkpoint path
-    # =========================================================
-
     if not os.path.isfile(path):
         raise FileNotFoundError(
             f"Adapter checkpoint not found:\n{path}"
         )
 
-    # =========================================================
     # 2. Load checkpoint
-    # =========================================================
-
     checkpoint = torch.load(
         path,
         map_location=device,
@@ -422,10 +416,7 @@ def load_language_adapter_auto(
             f"Invalid checkpoint format in:\n{path}"
         )
 
-    # =========================================================
     # 3. Read state dictionary
-    # =========================================================
-
     state_dict = checkpoint.get(
         "model_state_dict",
         checkpoint,
@@ -436,10 +427,7 @@ def load_language_adapter_auto(
             f"Invalid or empty adapter state dictionary in:\n{path}"
         )
 
-    # =========================================================
     # 4. Read saved metadata
-    # =========================================================
-
     saved_epoch = checkpoint.get(
         "epoch",
         None,
@@ -460,10 +448,7 @@ def load_language_adapter_auto(
         {},
     )
 
-    # =========================================================
     # 5. LoRA config is required for automatic loading
-    # =========================================================
-
     if lora_config is None:
         raise RuntimeError(
             "\nThis checkpoint does not contain 'lora_config'.\n\n"
@@ -472,15 +457,12 @@ def load_language_adapter_auto(
             "apply_lora_to_decoder(...) before loading."
         )
 
-    # =========================================================
     # 6. Extract LoRA configuration
-    # =========================================================
-
     required_config = [
         "r",
         "alpha",
         "dropout",
-        "target",
+        "targets",
     ]
 
     missing_config = [
@@ -508,13 +490,10 @@ def load_language_adapter_auto(
     )
 
     lora_targets = list(
-        lora_config["target"]
+        lora_config["targets"]
     )
 
-    # =========================================================
     # 7. Sanity checks
-    # =========================================================
-
     if lora_r <= 0:
         raise RuntimeError(
             f"Invalid LoRA rank: {lora_r}"
@@ -535,10 +514,7 @@ def load_language_adapter_auto(
             "LoRA target module list is empty."
         )
 
-    # =========================================================
     # 8. Make sure model does not already contain LoRA
-    # =========================================================
-
     existing_lora = [
         name
         for name, _ in model.named_parameters()
@@ -555,10 +531,7 @@ def load_language_adapter_auto(
             "    lora_pt = load_language_adapter_auto(...)\n"
         )
 
-    # =========================================================
     # 9. Automatically inject LoRA
-    # =========================================================
-
     model = apply_lora_fn(
         model,
         r=lora_r,
@@ -569,16 +542,10 @@ def load_language_adapter_auto(
 
     model = model.to(device)
 
-    # =========================================================
     # 10. Get current model state
-    # =========================================================
-
     model_state = model.state_dict()
 
-    # =========================================================
     # 11. Check adapter keys
-    # =========================================================
-
     unknown_keys = [
         key
         for key in state_dict
@@ -604,10 +571,7 @@ def load_language_adapter_auto(
             print("\n[Loader] WARNING")
             print(message)
 
-    # =========================================================
     # 12. Check tensor shapes
-    # =========================================================
-
     shape_errors = []
 
     for key, tensor in state_dict.items():
@@ -655,10 +619,6 @@ def load_language_adapter_auto(
             "\n".join(message)
         )
 
-    # =========================================================
-    # 13. Find LoRA tensors
-    # =========================================================
-
     lora_keys = [
         key
         for key in state_dict
@@ -682,20 +642,12 @@ def load_language_adapter_auto(
         if key.endswith("lora_B")
     ]
 
-    # =========================================================
-    # 14. Check A/B count
-    # =========================================================
-
     if len(lora_a_keys) != len(lora_b_keys):
         raise RuntimeError(
             "Invalid LoRA checkpoint.\n"
             f"lora_A tensors: {len(lora_a_keys)}\n"
             f"lora_B tensors: {len(lora_b_keys)}"
         )
-
-    # =========================================================
-    # 15. Verify every A has matching B
-    # =========================================================
 
     for a_key in lora_a_keys:
 
@@ -713,18 +665,10 @@ def load_language_adapter_auto(
                 f"  Missing B: {b_key}"
             )
 
-    # =========================================================
-    # 16. Load adapter weights
-    # =========================================================
-
     result = model.load_state_dict(
         state_dict,
         strict=False,
     )
-
-    # =========================================================
-    # 17. Unexpected keys
-    # =========================================================
 
     if result.unexpected_keys:
 
@@ -746,13 +690,8 @@ def load_language_adapter_auto(
             )
             print(message)
 
-    # =========================================================
-    # 18. Missing keys
-    #
     # Missing base-model weights are EXPECTED because
     # adapter checkpoints only contain adapted parameters.
-    # =========================================================
-
     missing_adapter_keys = []
 
     for key in lora_keys:
@@ -771,10 +710,6 @@ def load_language_adapter_auto(
                 for key in missing_adapter_keys
             )
         )
-
-    # =========================================================
-    # 19. Restore optimizer
-    # =========================================================
 
     optimizer_loaded = False
 
@@ -800,10 +735,6 @@ def load_language_adapter_auto(
                 "but optimizer_state_dict was not saved."
             )
 
-    # =========================================================
-    # 20. Restore scheduler
-    # =========================================================
-
     scheduler_loaded = False
 
     if scheduler is not None:
@@ -827,10 +758,6 @@ def load_language_adapter_auto(
                 "[Loader] WARNING: scheduler was provided "
                 "but scheduler_state_dict was not saved."
             )
-
-    # =========================================================
-    # 21. Statistics
-    # =========================================================
 
     total_tensors = len(
         state_dict
@@ -858,10 +785,6 @@ def load_language_adapter_auto(
         for key in state_dict
         if "layernorm" in key.lower()
     ]
-
-    # =========================================================
-    # 22. Verify saved counts
-    # =========================================================
 
     expected_num_tensors = checkpoint.get(
         "num_adapter_tensors"
@@ -891,10 +814,6 @@ def load_language_adapter_auto(
             f"Actual value: {total_parameters:,}"
         )
 
-    # =========================================================
-    # 23. Print report
-    # =========================================================
-
     if verbose:
 
         print(
@@ -922,10 +841,7 @@ def load_language_adapter_auto(
             f"Training epoch   : {saved_epoch}"
         )
 
-        # -----------------------------------------------------
         # LoRA configuration
-        # -----------------------------------------------------
-
         print(
             "\nLoRA configuration"
         )
@@ -952,10 +868,7 @@ def load_language_adapter_auto(
             f"{lora_targets}"
         )
 
-        # -----------------------------------------------------
         # Adapter tensors
-        # -----------------------------------------------------
-
         print(
             "\nAdapter parameters"
         )
@@ -1000,10 +913,7 @@ def load_language_adapter_auto(
             f"{len(norm_keys)}"
         )
 
-        # -----------------------------------------------------
         # Extra metadata
-        # -----------------------------------------------------
-
         if extra_info:
 
             print(
@@ -1016,10 +926,7 @@ def load_language_adapter_auto(
                     f"  {key:<18}: {value}"
                 )
 
-        # -----------------------------------------------------
         # Resume status
-        # -----------------------------------------------------
-
         if optimizer is not None:
 
             print(
