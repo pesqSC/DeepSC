@@ -6,6 +6,7 @@ Created on Mon Jun  1 09:47:54 2020
 utils.py
 """
 import os 
+import re
 import csv
 import math
 import torch
@@ -136,24 +137,154 @@ class NoamOpt:
         return weight_decay
 
             
+
+
 class SeqtoText:
-    def __init__(self, vocb_dictionary, end_idx, skip_tokens=None):
-        self.reverse_word_map = dict(zip(vocb_dictionary.values(), vocb_dictionary.keys()))
-        self.end_idx = end_idx
-        self.skip_tokens = set(skip_tokens or ("<PAD>", "<START>", "<EN>", "<PT>", "<ES>", "<FR>"))
-        
-    def sequence_to_text(self, list_of_indices):
-        # Looking up words in dictionary
-        words = []
+    """
+    Convert token IDs back into readable text.
+
+    Features:
+      - stops at <END>
+      - skips special/control tokens
+      - supports multilingual language tokens
+      - handles unknown token IDs safely
+      - fixes punctuation spacing
+    """
+
+    DEFAULT_SKIP_TOKENS = {
+        "<PAD>",
+        "<START>",
+        "<EN>",
+        "<PT>",
+        "<ES>",
+        "<FR>",
+    }
+
+    def __init__(
+        self,
+        vocb_dictionary,
+        end_idx,
+        skip_tokens=None,
+        unk_token="<UNK>",
+    ):
+        """
+        Parameters
+        ----------
+        vocb_dictionary : dict
+            token -> index vocabulary.
+
+        end_idx : int
+            Index of <END>.
+
+        skip_tokens : iterable, optional
+            Tokens that should not appear in final text.
+
+        unk_token : str
+            Representation for unknown token IDs.
+        """
+
+        if not isinstance(vocb_dictionary, dict):
+            raise TypeError(
+                "vocb_dictionary must be a dictionary."
+            )
+
+        self.reverse_word_map = {
+            idx: token
+            for token, idx in vocb_dictionary.items()
+        }
+
+        self.end_idx = int(end_idx)
+
+        if skip_tokens is None:
+            self.skip_tokens = set(
+                self.DEFAULT_SKIP_TOKENS
+            )
+        else:
+            self.skip_tokens = set(skip_tokens)
+
+        self.unk_token = unk_token
+
+    def sequence_to_tokens(
+        self,
+        list_of_indices,
+        keep_unknown=True,
+    ):
+        """
+        Convert IDs to tokens before text formatting.
+        """
+
+        tokens = []
+
         for idx in list_of_indices:
+
+            # Torch scalar -> Python int
+            if hasattr(idx, "item"):
+                idx = idx.item()
+
+            idx = int(idx)
+
+            # Stop decoding at <END>
             if idx == self.end_idx:
                 break
-            word = self.reverse_word_map.get(idx)
-            if word is not None and word not in self.skip_tokens:
-                words.append(word)
-        words = ' '.join(words)
-        return(words) 
 
+            token = self.reverse_word_map.get(idx)
+
+            # Unknown ID
+            if token is None:
+                if keep_unknown:
+                    tokens.append(self.unk_token)
+                continue
+
+            # Ignore control tokens
+            if token in self.skip_tokens:
+                continue
+
+            tokens.append(token)
+
+        return tokens
+
+    def sequence_to_text(self,list_of_indices,keep_unknown=True):
+        """
+        Convert token IDs into clean readable text.
+        """
+
+        tokens = self.sequence_to_tokens(
+            list_of_indices,
+            keep_unknown=keep_unknown,
+        )
+
+        text = " ".join(tokens)
+
+        # No space before:
+        # . , ! ? ; : %
+        text = re.sub(
+            r"\s+([.,!?;:%])",
+            r"\1",
+            text,
+        )
+
+        # Opening brackets should not have trailing space
+        text = re.sub(
+            r"([\(\[\{])\s+",
+            r"\1",
+            text,
+        )
+
+        # Closing brackets should not have leading space
+        text = re.sub(
+            r"\s+([\)\]\}])",
+            r"\1",
+            text,
+        )
+
+        # Normalize multiple spaces
+        text = re.sub(
+            r"\s+",
+            " ",
+            text,
+        ).strip()
+
+        return text
 
 class Channels():
 
