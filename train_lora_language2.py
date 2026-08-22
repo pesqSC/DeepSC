@@ -333,7 +333,7 @@ def main():
         LoRA = enable_language_adaptation(
             LoRA,
             train_embedding=False,
-            train_output_head=False,
+            train_output_head=True,
             train_layer_norm=True,
         )
 
