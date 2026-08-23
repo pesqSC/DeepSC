@@ -191,10 +191,10 @@ def main():
 
     initNetParams(deepsc) # init net parameters
 
+    best_val_loss = float("inf")
     for epoch in range(args.epochs):
         start = time.time()
         
-        bast_acc: float = 0.0
 
         loss = train(epoch, args, pad_idx, optimizer, criterion, deepsc)
         val_loss = validate(epoch, args, pad_idx, criterion, deepsc)
@@ -221,9 +221,9 @@ def main():
             save_model(deepsc, root_dir, epoch)
             bast_acc = val_loss
 
-        if val_loss < bast_acc:
+        if val_loss < best_val_loss:
             save_model(deepsc, root_dir, epoch)
-            bast_acc = val_loss
+            best_val_loss = val_loss
         
     record_loss = []
 
