@@ -14,7 +14,7 @@ import numpy as np
 from tqdm import tqdm
 from datetime import date
 
-from dataset_multilingual import EurParallelDataset, collate_parallel
+from dataset_multilingual import EurParallelDatasetBPE, collate_parallelBPE
 from models.transceiver import DeepSC
 from models.mutual_info import Mine
 from utils import (
@@ -36,9 +36,9 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 def validate(epoch, args, pad_idx, criterion, net):
-    test_eur = EurParallelDataset(args.en, 'test')
+    test_eur = EurParallelDatasetBPE(args.en, 'test')
     test_iterator = DataLoader(test_eur, batch_size=args.batch_size, num_workers=0,
-                                pin_memory=True, collate_fn=collate_parallel)
+                                pin_memory=True, collate_fn=collate_parallelBPE)
     net.eval()
     pbar = tqdm(test_iterator)
     
@@ -66,9 +66,9 @@ def validate(epoch, args, pad_idx, criterion, net):
 
 
 def train(epoch, args, pad_idx, optimizer, criterion, net)->float:
-    train_eur= EurParallelDataset(args.en, 'train')
+    train_eur= EurParallelDatasetBPE(args.en, 'train')
     train_iterator = DataLoader(train_eur, batch_size=args.batch_size, num_workers=0,
-                                pin_memory=True, collate_fn=collate_parallel)
+                                pin_memory=True, collate_fn=collate_parallelBPE)
     pbar = tqdm(train_iterator)
 
     noise_std = np.random.uniform(SNR_to_noise(5), SNR_to_noise(10), size=(1))
@@ -128,8 +128,8 @@ def main():
     setup_seed(42)
     parser = argparse.ArgumentParser()
     #parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
-    parser.add_argument('--vocab-file', default='europarl/vocab_multilingual.json', type=str)
-    parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh/multilingual', type=str)
+    parser.add_argument('--vocab-file', default='europarl_bpe/vocab_bpe.json', type=str)
+    parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh/multilingual_bpe', type=str)
     parser.add_argument('--channel', default='Rayleigh', type=str, help = 'Please choose AWGN, Rayleigh, and Rician')
     parser.add_argument('--MAX-LENGTH', default=33, type=int)
     parser.add_argument('--MIN-LENGTH', default=4, type=int)
