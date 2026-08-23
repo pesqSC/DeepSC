@@ -136,7 +136,167 @@ class NoamOpt:
         weight_decay =   0
         return weight_decay
 
-            
+
+class SeqtoTextBPE:
+    """
+    Convert token IDs back into readable text.
+
+    Supports both the old word-level vocabulary and SentencePiece BPE.
+
+    For BPE, pass:
+        tokenizer_model="data/train/europarl_bpe/tokenizer_bpe.model"
+    """
+
+    DEFAULT_SKIP_TOKENS = {
+        "<PAD>",
+        "<START>",
+        "<EN>",
+        "<PT>",
+        "<ES>",
+        "<FR>",
+    }
+
+    def __init__(
+        self,
+        vocb_dictionary,
+        end_idx,
+        skip_tokens=None,
+        unk_token="<UNK>",
+        tokenizer_model=None,
+    ):
+        if not isinstance(vocb_dictionary, dict):
+            raise TypeError(
+                "vocb_dictionary must be a dictionary."
+            )
+
+        self.reverse_word_map = {
+            int(idx): token
+            for token, idx in vocb_dictionary.items()
+        }
+
+        self.end_idx = int(end_idx)
+
+        if skip_tokens is None:
+            self.skip_tokens = set(self.DEFAULT_SKIP_TOKENS)
+        else:
+            self.skip_tokens = set(skip_tokens)
+
+        self.unk_token = unk_token
+        self.tokenizer = None
+
+        if tokenizer_model is not None:
+            try:
+                import sentencepiece as spm
+            except ImportError as exc:
+                raise ImportError(
+                    "SentencePiece is required for BPE decoding. "
+                    "Install it with: uv add sentencepiece"
+                ) from exc
+
+            self.tokenizer = spm.SentencePieceProcessor(
+                model_file=tokenizer_model
+            )
+
+            if self.tokenizer.eos_id() != self.end_idx:
+                raise ValueError(
+                    "Tokenizer <END> ID does not match end_idx: "
+                    f"{self.tokenizer.eos_id()} != {self.end_idx}"
+                )
+
+        self.skip_ids = {
+            int(idx)
+            for token, idx in vocb_dictionary.items()
+            if token in self.skip_tokens
+        }
+        self.unk_idx = vocb_dictionary.get(self.unk_token)
+        if self.unk_idx is not None:
+            self.unk_idx = int(self.unk_idx)
+
+    def _clean_ids(self, list_of_indices, keep_unknown=True):
+        cleaned = []
+
+        for idx in list_of_indices:
+            if hasattr(idx, "item"):
+                idx = idx.item()
+
+            idx = int(idx)
+
+            if idx == self.end_idx:
+                break
+
+            if idx in self.skip_ids:
+                continue
+
+            if idx not in self.reverse_word_map:
+                if keep_unknown and self.unk_idx is not None:
+                    cleaned.append(self.unk_idx)
+                continue
+
+            cleaned.append(idx)
+
+        return cleaned
+
+    def sequence_to_tokens(
+        self,
+        list_of_indices,
+        keep_unknown=True,
+    ):
+        cleaned_ids = self._clean_ids(
+            list_of_indices,
+            keep_unknown=keep_unknown,
+        )
+
+        return [
+            self.reverse_word_map.get(idx, self.unk_token)
+            for idx in cleaned_ids
+        ]
+
+    def sequence_to_text(
+        self,
+        list_of_indices,
+        keep_unknown=True,
+    ):
+        cleaned_ids = self._clean_ids(
+            list_of_indices,
+            keep_unknown=keep_unknown,
+        )
+
+        # Correct path for SentencePiece BPE.
+        if self.tokenizer is not None:
+            return self.tokenizer.decode(cleaned_ids).strip()
+
+        # Backward-compatible word-level path.
+        tokens = [
+            self.reverse_word_map.get(idx, self.unk_token)
+            for idx in cleaned_ids
+        ]
+
+        text = " ".join(tokens)
+
+        text = re.sub(
+            r"\s+([.,!?;:%])",
+            r"\1",
+            text,
+        )
+        text = re.sub(
+            r"([\(\[\{])\s+",
+            r"\1",
+            text,
+        )
+        text = re.sub(
+            r"\s+([\)\]\}])",
+            r"\1",
+            text,
+        )
+        text = re.sub(
+            r"\s+",
+            " ",
+            text,
+        ).strip()
+
+        return text
+
+
 
 
 class SeqtoText:
