@@ -137,7 +137,7 @@ def main():
     parser.add_argument('--dff', default=512, type=int)
     parser.add_argument('--num-layers', default=4, type=int)
     parser.add_argument('--num-heads', default=8, type=int)
-    parser.add_argument('--batch-size', default=96, type=int)
+    parser.add_argument('--batch-size', default=128, type=int)
     parser.add_argument('--epochs', default=50, type=int) 
     parser.add_argument('--en', default='en_en', type=str)
     parser.add_argument('--en-pt', default='en_pt', type=str)
@@ -228,5 +228,27 @@ def main():
     record_loss = []
 
 if __name__ == '__main__':
-    # setup_seed(10)
+    import torch
+    import gc
+
+    if torch.cuda.is_available():
+
+        # Remove Python references that are no longer used
+        gc.collect()
+
+        # Wait for pending CUDA operations
+        torch.cuda.synchronize()
+
+        # Release unused cached GPU memory
+        torch.cuda.empty_cache()
+
+        # Get free and total VRAM
+        free_mem, total_mem = torch.cuda.mem_get_info(0)
+
+        print(f"Cleared.")
+        print(f"Free VRAM : {free_mem / 1024**3:.2f} GB")
+        print(f"Total VRAM: {total_mem / 1024**3:.2f} GB")
+
+    else:
+        print("CUDA not available")
     main()
