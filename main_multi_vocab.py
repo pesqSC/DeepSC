@@ -217,9 +217,9 @@ def main():
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
 
-        if bast_acc == 0.0:
+        if best_val_loss == 0.0:
             save_model(deepsc, root_dir, epoch)
-            bast_acc = val_loss
+            best_val_loss = val_loss
 
         if val_loss < best_val_loss:
             save_model(deepsc, root_dir, epoch)
