@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from dataset_multilingual import EurParallelDataset, collate_parallel
+from dataset_multilingual import EurParallelDatasetBPE, collate_parallelBPE
 from dataset import EurDataset, collate_data
 
 from datetime import date
@@ -38,9 +38,15 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Receiver-only KD for DeepSC")
 
     # files
-    parser.add_argument("--vocab-file", type=str, default="./data/train/europarl/vocab_multilingual.json")
-    parser.add_argument("--teacher-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual/2026-08-09")
-    parser.add_argument("--save-dir", type=str, default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd")
+    parser.add_argument(
+        "--vocab-file", type=str, default="./data/train/europarl_bpe/vocab_bpe.json"
+    )
+    parser.add_argument(
+        "--teacher-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual_bpe/2026-08-23"
+    )
+    parser.add_argument(
+        "--save-dir", type=str, default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd_bpe"
+    )
 
     # model config (must match teacher checkpoint)
     parser.add_argument("--max-len", type=int, default=33)
@@ -391,8 +397,8 @@ def main():
     start_idx = token_to_idx["<START>"]
     end_idx = token_to_idx["<END>"]
 
-    train_set = EurParallelDataset(args.en, 'train')
-    test_set = EurParallelDataset(args.en, "test")
+    train_set = EurParallelDatasetBPE(args.en, 'train')
+    test_set = EurParallelDatasetBPE(args.en, "test")
 
     # load dataset
     train_loader = DataLoader(
@@ -401,7 +407,7 @@ def main():
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
-        collate_fn=collate_parallel,
+        collate_fn=collate_parallelBPE,
     )
     val_loader = DataLoader(
         test_set,
@@ -409,15 +415,15 @@ def main():
         shuffle=False,
         num_workers=args.num_workers,
         pin_memory=True,
-        collate_fn=collate_parallel,
+        collate_fn=collate_parallelBPE,
     )
 
     deepsc = DeepSC(
         args.num_layers, 
         num_vocab,
         num_vocab,
-        args.max_len,
-        args.max_len,
+        num_vocab,
+        num_vocab,
         args.d_model,
         args.num_heads,
         args.dff,
@@ -465,8 +471,8 @@ def main():
         2, 
         num_vocab, 
         num_vocab, 
-        args.max_len, 
-        args.max_len, 
+        num_vocab, 
+        num_vocab, 
         args.d_model, 
         4, 
         args.dff, 
