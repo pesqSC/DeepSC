@@ -9,7 +9,7 @@ from tqdm import tqdm
 from datetime import date
 from functools import partial
 
-from dataset_multilingual import EurParallelDataset, collate_parallel
+from dataset_multilingual import EurParallelDatasetBPE, collate_parallelBPE
 from models.transceiver import DeepSC
 from student import Student
 from models.tx_model import Transmitter
@@ -75,14 +75,14 @@ def validate(
     noise_std,
     train_lag
 ):
-    test_eur = EurParallelDataset(train_lag, 'test')
+    test_eur = EurParallelDatasetBPE(train_lag, 'test')
 
     test_iterator = DataLoader(
         test_eur, 
         batch_size=args.batch_size, 
         num_workers=2,
         pin_memory=True, 
-        collate_fn=partial(collate_parallel, pad_idx=pad_idx)
+        collate_fn=partial(collate_parallelBPE, pad_idx=pad_idx)
     )
 
     transmitter.eval()
@@ -198,18 +198,18 @@ def main():
 
     parser.add_argument(
         "--vocab-file", 
-        default="data/train/europarl/vocab_multilingual.json"
+        default="./data/train/europarl_bpe/vocab_bpe.json"
     )
     parser.add_argument(
         "--student-checkpoint", 
-        default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd/one_student/2026-08-12"
+        default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd_bpe/one_student/2026-08-24"
     )
     parser.add_argument(
         "--transmitter-checkpoint", 
         type=str, 
-        default="./checkpoints/deepsc-Rayleigh/multilingual/2026-08-09"
+        default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd_bpe/2026-08-23"
     )
-    parser.add_argument("--save-lora", default="./checkpoints/deepsc-Rayleigh/lora")
+    parser.add_argument("--save-lora", default="./checkpoints/deepsc-Rayleigh/lora_bpe")
 
     parser.add_argument("--channel", default="Rayleigh", type=str, choices=["AWGN", "Rayleigh", "Rician"])
     parser.add_argument("--snr-db-low", type=float, default=5.0)
@@ -270,7 +270,7 @@ def main():
     pad_idx = token_to_idx["<PAD>"]
 
     train_lag = args.en_pt
-    dataset = EurParallelDataset(train_lag, 'train')
+    dataset = EurParallelDatasetBPE(train_lag, 'train')
 
     loader = DataLoader(
         dataset,
@@ -278,13 +278,18 @@ def main():
         shuffle=True,
         num_workers=2,
         pin_memory=True,
-        collate_fn=partial(collate_parallel, pad_idx=pad_idx)
+        collate_fn=partial(collate_parallelBPE, pad_idx=pad_idx)
     )
 
     deepsc = DeepSC(
-        args.num_layers, vocab_size, vocab_size, 
-        args.MAX_LEN, args.MAX_LEN, args.d_model, 
-        args.num_heads, args.dff, 0.1
+        args.num_layers, 
+        vocab_size, 
+        vocab_size, 
+        vocab_size,
+        vocab_size, 
+        args.d_model, 
+        args.num_heads, 
+        args.dff, 0.1
     )
     
     transmitter = Transmitter(deepsc.encoder, deepsc.channel_encoder).to(device)
@@ -293,8 +298,8 @@ def main():
         2, 
         vocab_size,
         vocab_size, 
-        args.MAX_LEN,
-        args.MAX_LEN, 
+        vocab_size,
+        vocab_size, 
         args.d_model, 
         4, 
         args.dff, 
