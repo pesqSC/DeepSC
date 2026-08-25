@@ -207,7 +207,7 @@ def main():
     parser.add_argument(
         "--transmitter-checkpoint", 
         type=str, 
-        default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd_bpe/2026-08-23"
+        default="./checkpoints/deepsc-Rayleigh/multilingual_bpe/2026-08-23"
     )
     parser.add_argument("--save-lora", default="./checkpoints/deepsc-Rayleigh/lora_bpe")
 
