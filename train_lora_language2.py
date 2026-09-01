@@ -227,7 +227,9 @@ def main():
     parser.add_argument(
         "--lora-targets", 
         nargs="+", 
-        default=["self_q", "self_k","self_v","self_out","src_q","src_k","src_v","src_out"],
+        default=["self_q", "self_k","self_v","self_out","src_q","src_k","src_v","src_out","ffn_1",
+                "ffn_2"
+            ],
         help="Targets to apply LoRA to"
     )
 
