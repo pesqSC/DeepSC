@@ -346,9 +346,12 @@ def main():
 
     optimizer = build_differential_optimizer(
         model=LoRA,
+        
         lr_lora=args.lr,
-        lr_head_embed=args.embedding_lr,
+        lr_head=args.output_lr,
+        lr_embedding=args.embedding_lr,
         lr_norm=args.norm_lr,
+        
         weight_decay=1e-4
     )
     
