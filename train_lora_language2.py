@@ -221,9 +221,9 @@ def main():
     parser.add_argument("--lr", default=1e-4, type=float)
 
     # Adapter hyperparameters
-    parser.add_argument("--lora-r", type=int, default=8)
+    parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=float, default=16)
-    parser.add_argument("--lora-dropout", type=float, default=0.0)
+    parser.add_argument("--lora-dropout", type=float, default=0.005)
     parser.add_argument(
         "--lora-targets", 
         nargs="+", 
