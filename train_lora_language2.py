@@ -222,7 +222,7 @@ def main():
 
     # Adapter hyperparameters
     parser.add_argument("--lora-r", type=int, default=16)
-    parser.add_argument("--lora-alpha", type=float, default=16)
+    parser.add_argument("--lora-alpha", type=float, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.005)
     parser.add_argument(
         "--lora-targets", 
@@ -355,10 +355,18 @@ def main():
         weight_decay=1e-4
     )
     
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    #     optimizer,
+    #     T_max=args.epochs,
+    #     eta_min=1e-6
+    # )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
-        T_max=args.epochs,
-        eta_min=1e-6
+        mode='min',
+        factor=0.5,
+        patience=3,
+        threshold=1e-3,
+        min_lr=1e-6
     )
 
     # Setup directories
@@ -390,7 +398,7 @@ def main():
         )
 
         # Step learning rate scheduler per epoch
-        scheduler.step()
+        scheduler.step(val_loss)
 
         save_epoch_results(
             os.path.join(root_dir, 'results.csv'),
