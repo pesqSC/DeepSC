@@ -13,7 +13,7 @@ import numpy as np
 from dataset import EurDataset, collate_data
 from models.transceiver import DeepSC
 from torch.utils.data import DataLoader
-from utils import BleuScore, SNR_to_noise, greedy_decode, SeqtoText
+from utils.model_utils import BleuScore, SNR_to_noise, greedy_decode, SeqtoText
 from tqdm import tqdm
 from sklearn.preprocessing import normalize
 # from bert4keras.backend import keras
