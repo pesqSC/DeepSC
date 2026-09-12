@@ -17,8 +17,18 @@ from student import Student
 from teacher import build_teacher
 from models.rx_model import Receiver
 from models.tx_model import Transmitter
-from utils import create_masks, loss_function, validate_one_epoch, save_student_receiver
-from utils import kd_kl_loss, masked_ce_loss, feature_distillation_loss
+from utils.train_utils import (
+    create_masks, 
+    loss_function, 
+    validate_one_epoch, 
+    masked_ce_loss, 
+)
+from utils.kd_utils import (
+    kd_kl_loss, 
+    feature_distillation_loss,
+)
+
+from utils.model_utils import save_student_receiver
 
 
 
