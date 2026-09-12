@@ -1,3 +1,7 @@
+import torch
+import torch.nn.functional as F
+
+
 def feature_distillation_loss(student_feat, teacher_feat, targets, pad_idx):
     """
     MSE loss for feature-level distillation
