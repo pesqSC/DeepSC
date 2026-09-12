@@ -25,15 +25,16 @@ from models.lora2 import (
     save_language_adapter,
 )
 
-from utils import (
-    SNR_to_noise, 
+from utils.model_utils import (
+    Channels,
+    snr_to_noise, 
     create_masks, 
     setup_seed, 
     validate_multi_epoch,
-    loss_function,
-    Channels,
     save_epoch_results
 )
+
+from utils.train_utils import loss_function
 
 def val_step(transmitter, LoRA, src, trg, pad, criterion, channel, noise_std):
     channels = Channels()
@@ -157,7 +158,7 @@ def train_lora_epoch(
             args.snr_db_high,
         )
 
-        noise_std = SNR_to_noise(snr_db)
+        noise_std = snr_to_noise(snr_db)
 
         optimizer.zero_grad()
 
@@ -446,7 +447,7 @@ def main():
             args
         )
 
-        val_noise_std = SNR_to_noise(8.0)   
+        val_noise_std = snr_to_noise(8.0)   
         
         val_loss = validate(
             epoch=epoch,
