@@ -12,12 +12,13 @@ import torch
 import random
 import torch.nn as nn
 import numpy as np
-from utils import SNR_to_noise, initNetParams, train_step, val_step, train_mi
 from dataset import EurDataset, collate_data
 from models.transceiver import DeepSC
 from models.mutual_info import Mine
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from utils.model_utils import snr_to_noise, initNetParams
+from utils.train_utils import  initNetParams, train_step, val_step, train_mi
 
 parser = argparse.ArgumentParser()
 #parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
@@ -71,7 +72,7 @@ def train(epoch, args, net, mi_net=None):
                                 pin_memory=True, collate_fn=collate_data)
     pbar = tqdm(train_iterator)
 
-    noise_std = np.random.uniform(SNR_to_noise(5), SNR_to_noise(10), size=(1))
+    noise_std = np.random.uniform(snr_to_noise(5), snr_to_noise(10), size=(1))
 
     for sents in pbar:
         sents = sents.to(device)
