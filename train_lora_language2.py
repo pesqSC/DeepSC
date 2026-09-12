@@ -20,16 +20,18 @@ from models.lora2 import (
     save_language_adapter,
 )
 
-from utils import (
-    SNR_to_noise, 
+from utils.model_utils import (
+    Channels,
+    snr_to_noise, 
     create_masks, 
     setup_seed, 
-    loss_function,
-    Channels,
     save_epoch_results,
-    build_differential_optimizer,
     masked_ce_loss
 )
+
+from utils.lora_utils import build_differential_optimizer
+    
+from utils.train_utils import loss_function
 
 
 def val_step(transmitter, LoRA, src, trg, pad_idx, criterion, channel, noise_std):
@@ -145,7 +147,7 @@ def train_lora_epoch(
         src_mask, look_ahead_mask = create_masks(src, trg_inp, pad_idx)
 
         snr_db = np.random.uniform(args.snr_db_low, args.snr_db_high)
-        noise_std = SNR_to_noise(snr_db)
+        noise_std = snr_to_noise(snr_db)
 
         optimizer.zero_grad(set_to_none=True)
 
@@ -376,7 +378,7 @@ def main():
 
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
     best_val_loss = float('inf')
-    val_noise_std = SNR_to_noise(args.val_snr_db)
+    val_noise_std = snr_to_noise(args.val_snr_db)
 
     for epoch in range(args.epochs):
         loss = train_lora_epoch(
