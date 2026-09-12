@@ -5,7 +5,7 @@ from models.rx_model import Receiver
 from student import Student
 from models.mutual_info import sample_batch, mutual_information
 
-from utils.model_utils import (Channels, PowerNormalize, create_masks, masked_ce_loss)
+from utils.model_utils import (Channels, power_normalize, create_masks, masked_ce_loss)
 from utils.kd_utils import (kd_kl_loss, feature_distillation_loss)
 
 
@@ -23,7 +23,7 @@ def train_step(model, src, trg, n_var, pad, opt, criterion, channel, mi_net=None
     
     enc_output = model.encoder(src, src_mask)
     channel_enc_output = model.channel_encoder(enc_output)
-    Tx_sig = PowerNormalize(channel_enc_output)
+    Tx_sig = power_normalize(channel_enc_output)
 
     if channel == 'AWGN':
         Rx_sig = channels.AWGN(Tx_sig, n_var)
@@ -69,7 +69,7 @@ def train_mi(model, mi_net, src, n_var, padding_idx, opt, channel, device):
     src_mask = (src == padding_idx).unsqueeze(-2).type(torch.FloatTensor).to(device)  # [batch, 1, seq_len]
     enc_output = model.encoder(src, src_mask)
     channel_enc_output = model.channel_encoder(enc_output)
-    Tx_sig = PowerNormalize(channel_enc_output)
+    Tx_sig = power_normalize(channel_enc_output)
 
     if channel == 'AWGN':
         Rx_sig = channels.AWGN(Tx_sig, n_var)
@@ -99,7 +99,7 @@ def val_step(model, src, trg, n_var, pad, criterion, channel):
 
     enc_output = model.encoder(src, src_mask)
     channel_enc_output = model.channel_encoder(enc_output)
-    Tx_sig = PowerNormalize(channel_enc_output)
+    Tx_sig = power_normalize(channel_enc_output)
 
     if channel == 'AWGN':
         Rx_sig = channels.AWGN(Tx_sig, n_var)
