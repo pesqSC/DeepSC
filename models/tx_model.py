@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils import PowerNormalize, Channels
+from utils.model_utils import power_normalize, Channels
 
 class Transmitter(nn.Module):
     """
@@ -38,7 +38,7 @@ class Transmitter(nn.Module):
         """
         en_out = self.encoder(src, src_mask)
         ch_en_out = self.channel_encoder(en_out)
-        Tx_sig = PowerNormalize(ch_en_out)
+        Tx_sig = power_normalize(ch_en_out)
         z_noisy = self.apply_channel(Tx_sig, channel_type=channel_type, noise_std=noise_std)
         return en_out, ch_en_out, Tx_sig, z_noisy
     
