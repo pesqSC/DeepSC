@@ -17,13 +17,16 @@ from datetime import date
 from dataset_multilingual import EurParallelDatasetBPE, collate_parallelBPE
 from models.transceiver import DeepSC
 from models.mutual_info import Mine
-from utils import (
-    SNR_to_noise, 
+from utils.model_utils import (
+    snr_to_noise, 
+    initNetParams, 
+    save_epoch_results
+)
+from utils.train_utils import (
     initNetParams, 
     train_step, 
     val_step, 
     train_mi,
-    save_epoch_results
 )
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -71,7 +74,7 @@ def train(epoch, args, pad_idx, optimizer, criterion, net)->float:
                                 pin_memory=True, collate_fn=collate_parallelBPE)
     pbar = tqdm(train_iterator)
 
-    noise_std = np.random.uniform(SNR_to_noise(5), SNR_to_noise(10), size=(1))
+    noise_std = np.random.uniform(snr_to_noise(5), snr_to_noise(10), size=(1))
 
     total_loss: float = 0.0
     num_batches: int = 0
