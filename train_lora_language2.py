@@ -343,7 +343,7 @@ def main():
             LoRA,
             train_embedding=True,
             train_output_head=False,
-            train_layer_norm=False,
+            train_layer_norm=True,
         )
 
     optimizer = build_differential_optimizer(
