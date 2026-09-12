@@ -754,10 +754,7 @@ def main() -> None:
         default="en_fr.json",
     )
 
-    # --------------------------------------------------------
     # BPE
-    # --------------------------------------------------------
-
     parser.add_argument(
         "--vocab-size",
         type=int,
@@ -788,10 +785,7 @@ def main() -> None:
         help="Retrain tokenizer even if tokenizer_bpe.model already exists.",
     )
 
-    # --------------------------------------------------------
     # Sequence filtering
-    # --------------------------------------------------------
-
     parser.add_argument(
         "--min-len",
         type=int,
@@ -845,10 +839,7 @@ def main() -> None:
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # --------------------------------------------------------
     # Enabled datasets
-    # --------------------------------------------------------
-
     dataset_paths = {
         "en_en": os.path.join(
             args.data_dir,
@@ -872,10 +863,7 @@ def main() -> None:
         # "en_fr": "fr",
     }
 
-    # --------------------------------------------------------
     # Load
-    # --------------------------------------------------------
-
     print("\n" + "=" * 70)
     print("LOADING JSON DATASETS")
     print("=" * 70)
@@ -890,10 +878,7 @@ def main() -> None:
 
         print(f"Records: {len(records):,}")
 
-    # --------------------------------------------------------
     # Validate alignment
-    # --------------------------------------------------------
-
     print("\n" + "=" * 70)
     print("VALIDATING DATASET ALIGNMENT")
     print("=" * 70)
@@ -914,10 +899,7 @@ def main() -> None:
 
         print("Alignment OK.")
 
-    # --------------------------------------------------------
     # Shared split IDs
-    # --------------------------------------------------------
-
     train_ids, test_ids = make_split_ids(
         base_records=base_records,
         train_ratio=args.train_ratio,
@@ -930,10 +912,7 @@ def main() -> None:
     print(f"Train IDs: {len(train_ids):,}")
     print(f"Test IDs : {len(test_ids):,}")
 
-    # --------------------------------------------------------
     # Train/load BPE
-    # --------------------------------------------------------
-
     model_prefix = os.path.join(
         args.output_dir,
         "tokenizer_bpe",
@@ -999,10 +978,7 @@ def main() -> None:
 
     tokenizer = load_tokenizer(model_path)
 
-    # --------------------------------------------------------
     # Export JSON vocabulary for legacy DeepSC utilities
-    # --------------------------------------------------------
-
     vocab_json_path = os.path.join(
         args.output_dir,
         "vocab_bpe.json",
@@ -1027,10 +1003,7 @@ def main() -> None:
 
     show_tokenizer_example(tokenizer)
 
-    # --------------------------------------------------------
     # Encode TRAIN and TEST separately using shared split IDs
-    # --------------------------------------------------------
-
     print("\n" + "=" * 70)
     print("ENCODING DEEPSC BPE DATASETS")
     print("=" * 70)
@@ -1089,10 +1062,7 @@ def main() -> None:
         print(f"  {train_path}")
         print(f"  {test_path}")
 
-    # --------------------------------------------------------
     # Finished
-    # --------------------------------------------------------
-
     print("\n" + "=" * 70)
     print("BPE PREPROCESSING COMPLETE")
     print("=" * 70)
