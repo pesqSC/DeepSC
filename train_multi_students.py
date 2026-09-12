@@ -17,8 +17,19 @@ from student import Student
 from teacher import build_teacher
 from models.rx_model import Receiver
 from models.tx_model import Transmitter
-from utils import create_masks, loss_function, validate_one_epoch, save_student_receiver
-from utils import kd_kl_loss, masked_ce_loss, feature_distillation_loss, SNR_to_noise
+from utils.model_utils import (
+    create_masks, 
+    save_student_receiver,
+    snr_to_noise
+)
+from utils.kd_utils import kd_kl_loss, feature_distillation_loss
+
+from utils.train_utils import (
+    loss_function,
+    masked_ce_loss,
+    validate_one_epoch, 
+
+)
 
 
 
@@ -325,8 +336,8 @@ def main():
 
     # noise_std = snr_db_to_noise_std(float(args.snr_db))
     noise_std = np.random.uniform(
-            SNR_to_noise(args.snr_db_low), 
-            SNR_to_noise(args.snr_db_high), 
+            snr_to_noise(args.snr_db_low), 
+            snr_to_noise(args.snr_db_high), 
             # size=(1)
         )
 
