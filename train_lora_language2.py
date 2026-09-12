@@ -341,9 +341,9 @@ def main():
     if args.adapt_heads_and_norms:
         LoRA = enable_language_adaptation(
             LoRA,
-            train_embedding=False,
-            train_output_head=True,
-            train_layer_norm=True,
+            train_embedding=True,
+            train_output_head=False,
+            train_layer_norm=False,
         )
 
     optimizer = build_differential_optimizer(
