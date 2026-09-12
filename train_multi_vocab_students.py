@@ -19,14 +19,23 @@ from student import Student
 from teacher import build_teacher
 from models.rx_model import Receiver
 from models.tx_model import Transmitter
-from utils import create_masks, loss_function, validate_multi_epoch, save_student_receiver
-from utils import (
-    kd_kl_loss, 
+from utils.train_utils import (
+    create_masks, 
+    loss_function, 
+    validate_multi_epoch, 
+    val_step,
+)
+from utils.model_utils import (
     masked_ce_loss, 
-    feature_distillation_loss, 
-    SNR_to_noise, 
+    snr_to_noise, 
     masked_ce_loss2,
-    save_epoch_results
+    save_epoch_results,
+    save_student_receiver,
+)
+
+from utils.kd_utils import (
+    kd_kl_loss, 
+    feature_distillation_loss, 
 )
 
 
@@ -191,7 +200,7 @@ def train(
                 args.snr_db_high
             )
 
-        noise_std = SNR_to_noise(snr_db)
+        noise_std = snr_to_noise(snr_db)
 
         with torch.no_grad():
             _, _, _, z_noisy = transmitter(
@@ -459,8 +468,8 @@ def main():
 
     # noise_std = snr_db_to_noise_std(float(args.snr_db))
     noise_std = np.random.uniform(
-            SNR_to_noise(args.snr_db_low), 
-            SNR_to_noise(args.snr_db_high), 
+            snr_to_noise(args.snr_db_low), 
+            snr_to_noise(args.snr_db_high), 
             # size=(1)
         )
 
