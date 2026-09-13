@@ -23,7 +23,6 @@ from utils.model_utils import (
     save_epoch_results
 )
 from utils.train_utils import (
-    initNetParams, 
     train_step, 
     val_step, 
     train_mi,
@@ -134,12 +133,12 @@ def main():
     parser.add_argument('--vocab-file', default='europarl_bpe/vocab_bpe.json', type=str)
     parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh/multilingual_bpe', type=str)
     parser.add_argument('--channel', default='Rayleigh', type=str, help = 'Please choose AWGN, Rayleigh, and Rician')
-    parser.add_argument('--MAX-LENGTH', default=33, type=int)
+    parser.add_argument('--MAX-LENGTH', default=67, type=int)
     parser.add_argument('--MIN-LENGTH', default=4, type=int)
     parser.add_argument('--d-model', default=128, type=int)
     parser.add_argument('--dff', default=512, type=int)
-    parser.add_argument('--num-layers', default=4, type=int)
-    parser.add_argument('--num-heads', default=8, type=int)
+    parser.add_argument('--num-layers', default=8, type=int)
+    parser.add_argument('--num-heads', default=16, type=int)
     parser.add_argument('--batch-size', default=128, type=int)
     parser.add_argument('--epochs', default=50, type=int) 
     parser.add_argument('--en', default='en_en', type=str)

@@ -38,6 +38,7 @@ import random
 import argparse
 import tempfile
 import unicodedata
+from datetime import date
 
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
@@ -758,7 +759,7 @@ def main() -> None:
     parser.add_argument(
         "--vocab-size",
         type=int,
-        default=32000,
+        default=96000,
         help="Target SentencePiece BPE vocabulary size.",
     )
 
@@ -796,7 +797,7 @@ def main() -> None:
     parser.add_argument(
         "--max-len",
         type=int,
-        default=48,
+        default=64,
         help=(
             "Maximum number of CONTENT BPE tokens. "
             "BPE sequences are usually longer than word sequences."
@@ -812,7 +813,7 @@ def main() -> None:
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
+        default=48,
     )
 
     args = parser.parse_args()
@@ -837,7 +838,14 @@ def main() -> None:
             "--train-ratio must be between 0 and 1."
         )
 
+    # Seed
+    random.seed(args.seed)
+
+    # setup output_dir
+    today = date.today()
+    args.output_dir = os.path.join(args.output_dir, today.strftime("%Y-%m-%d"))
     os.makedirs(args.output_dir, exist_ok=True)
+    
 
     # Enabled datasets
     dataset_paths = {
@@ -851,16 +859,16 @@ def main() -> None:
         ),
 
         # Enable later when ready:
-        # "en_es": os.path.join(args.data_dir, args.en_es_file),
-        # "en_fr": os.path.join(args.data_dir, args.en_fr_file),
+        "en_es": os.path.join(args.data_dir, args.en_es_file),
+        "en_fr": os.path.join(args.data_dir, args.en_fr_file),
     }
 
     language_map = {
         "en_en": "en",
         "en_pt": "pt",
 
-        # "en_es": "es",
-        # "en_fr": "fr",
+        "en_es": "es",
+        "en_fr": "fr",
     }
 
     # Load

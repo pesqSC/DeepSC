@@ -4,6 +4,8 @@ import json
 import sentencepiece as spm
 
 import torch
+import torch.nn.functional as F
+
 from models.tx_model import Transmitter
 from utils.model_utils import (
     power_normalize,
@@ -277,7 +279,7 @@ def transmitter(src: torch.Tensor,src_mask: torch.Tensor, model: Transmitter, pa
 
 @torch.no_grad()
 def greedy_decode(
-    tx_sig,
+    Rx_sig,
     model,
     src,
     src_mask,
@@ -345,8 +347,8 @@ def greedy_decode(
     device:
         Device to run the model on.
     """
-    batch_size = tx_sig.size(0)
-    Rx_sig = send_through_channel(tx_sig, channel, snr)
+    batch_size = Rx_sig.size(0)
+    # Rx_sig = send_through_channel(tx_sig, channel, snr)
 
     # CHANNEL DECODER
     memory = model.channel_decoder(Rx_sig)
@@ -454,263 +456,606 @@ def greedy_decode(
 
     return outputs
 
+
 @torch.no_grad()
 def beam_decode(
-     Rx_sig,
+    Rx_sig,
     model,
     src,
+    src_mask,
     max_len,
-    start_symbol,
-    language_symbol,
-    end_symbol,
+    start_idx,
     padding_idx,
+    end_idx,
+    target_language_idx,
+    channel,
+    snr,
     device,
     beam_size=5,
     length_penalty=0.7,
-    idx_to_token=None,
-    debug=False,
-)-> torch.Tensor:
+    forbidden_token_ids=None,
+    return_all_beams=False,
+):
     """
-    Beam-search decoding for Student / LoRA receiver.
+    Beam-search decoding for DeepSC + BPE.
 
-    Prefix:
-        <START> <LANGUAGE>
+    Initial sequence:
+
+        <START> <LANG>
 
     Example EN -> PT:
-        <START> <PT>
+
+        <START> <PT> ...
 
     Parameters
     ----------
-    beam_size : int
-        Number of candidate sequences retained at each step.
+    Rx_sig:
+        Channel-encoder output.
+        Shape usually:
+            [batch, src_len, channel_dim]
 
-    length_penalty : float
-        Penalizes overly short sequences.
-        0.0 = no length normalization.
-        Typical values: 0.6 - 1.0.
+    model:
+        DeepSC receiver / complete model containing:
+            model.channel_decoder
+            model.decoder
+            model.dense
 
-    debug : bool
-        Print current beam candidates.
+    src:
+        Source token IDs.
+        Shape:
+            [batch, src_len]
+
+    src_mask:
+        Source padding mask used by decoder cross-attention.
+
+    max_len:
+        Maximum TOTAL sequence length, including:
+            <START>
+            <LANG>
+            content
+            <END>
+
+    start_idx:
+        ID of <START>.
+
+    padding_idx:
+        ID of <PAD>.
+
+    end_idx:
+        ID of <END>.
+
+    target_language_idx:
+        Language control token.
+        Examples:
+            <EN>
+            <PT>
+
+    channel:
+        "AWGN", "Rayleigh", "Rician", etc.
+
+    snr:
+        SNR in dB.
+
+    device:
+        torch device.
+
+    beam_size:
+        Number of beams.
+
+    length_penalty:
+        Controls preference for longer sequences.
+
+        0.0:
+            no length normalization
+
+        ~0.6-1.0:
+            usually reasonable for translation
+
+    forbidden_token_ids:
+        Optional iterable of token IDs that cannot be generated.
+
+        Example:
+            [
+                padding_idx,
+                start_idx,
+                en_idx,
+                pt_idx,
+                es_idx,
+                fr_idx,
+            ]
+
+        Do NOT include end_idx.
+
+    return_all_beams:
+        If False:
+            returns best sequence [B, L]
+
+        If True:
+            returns:
+                best_sequences,
+                all_beams,
+                normalized_scores
+
+    Returns
+    -------
+    best_sequences:
+        Tensor [batch, generated_length]
     """
 
-    # Channel decoding
-    memory = model.channel_decoder(Rx_sig)
+    model.eval()
 
-    batch_size = src.size(0)
+    batch_size = Rx_sig.size(0)
 
-    if batch_size != 1:
+    if beam_size < 1:
+        raise ValueError("beam_size must be >= 1.")
+
+    if max_len < 3:
         raise ValueError(
-            "This beam-search implementation currently "
-            "supports batch_size=1."
+            "max_len must allow at least "
+            "<START> <LANG> <END>."
         )
 
-    # Initial prefix:
-    # <START> <LANGUAGE>
-    initial_sequence = torch.tensor(
-        [[start_symbol, language_symbol]],
+    # [B, src_len, d_model]
+    memory = model.channel_decoder(
+        Rx_sig
+    )
+
+    # =====================================================
+    # 2. INITIAL PREFIX
+    #
+    # <START> <LANG>
+    # =====================================================
+
+    prefix = torch.tensor(
+        [
+            start_idx,
+            target_language_idx,
+        ],
         dtype=src.dtype,
         device=device,
     )
 
-    # Each beam:
-    # {
-    #   "tokens": Tensor [1, T],
-    #   "score": cumulative log probability,
-    #   "finished": bool
-    # }
-    beams = [
-        {
-            "tokens": initial_sequence,
-            "score": 0.0,
-            "finished": False,
-        }
-    ]
-
-    # Length-normalized score
-    def normalized_score(beam):
-        tokens = beam["tokens"]
-
-        # Ignore <START> and language token
-        generated_length = max(
-            tokens.size(1) - 2,
-            1,
+    # [B, beam, 2]
+    sequences = (
+        prefix
+        .view(1, 1, 2)
+        .expand(
+            batch_size,
+            beam_size,
+            2,
         )
+        .clone()
+    )
 
-        if length_penalty <= 0:
-            return beam["score"]
+    # =====================================================
+    # 3. BEAM SCORES
+    # =====================================================
+    #
+    # At the beginning only beam 0 is valid.
+    #
+    # Beam 0 -> score = 0
+    # Others -> -inf
+    # =====================================================
 
-        penalty = (
-            (5.0 + generated_length) / 6.0
-        ) ** length_penalty
+    beam_scores = torch.full(
+        (batch_size, beam_size),
+        float("-inf"),
+        dtype=torch.float32,
+        device=device,
+    )
 
-        return beam["score"] / penalty
+    beam_scores[:, 0] = 0.0
 
-    # Beam-search loop
+    # Whether each beam has already produced <END>
+    finished = torch.zeros(
+        batch_size,
+        beam_size,
+        dtype=torch.bool,
+        device=device,
+    )
+
+    # Store the sequence length where EOS was first emitted.
+    #
+    # Default = max_len for beams that never emit EOS.
+    sequence_lengths = torch.full(
+        (batch_size, beam_size),
+        max_len,
+        dtype=torch.long,
+        device=device,
+    )
+
+    # =====================================================
+    # 4. EXPAND ENCODER MEMORY TO BEAMS
+    # =====================================================
+
+    # Original:
+    # [B, src_len, d_model]
+    #
+    # Expanded:
+    # [B*beam, src_len, d_model]
+
+    memory_beam = memory.repeat_interleave(
+        beam_size,
+        dim=0,
+    )
+
+    # src_mask can usually be:
+    #
+    # [B, 1, src_len]
+    #
+    # or
+    #
+    # [B, 1, 1, src_len]
+    #
+    # repeat_interleave on dim 0 works for either.
+
+    if src_mask is not None:
+        src_mask_beam = (
+            src_mask.repeat_interleave(
+                beam_size,
+                dim=0,
+            )
+        )
+    else:
+        src_mask_beam = None
+
+    # =====================================================
+    # 5. FORBIDDEN TOKENS
+    # =====================================================
+
+    if forbidden_token_ids is None:
+        forbidden_token_ids = []
+
+    forbidden_token_ids = set(
+        int(x)
+        for x in forbidden_token_ids
+    )
+
+    # Never forbid EOS accidentally.
+    forbidden_token_ids.discard(
+        end_idx
+    )
+
+    # =====================================================
+    # 6. AUTOREGRESSIVE BEAM SEARCH
+    # =====================================================
+
     for step in range(max_len - 2):
 
-        candidates = []
+        current_len = sequences.size(-1)
 
-        for beam in beams:
+        # -------------------------------------------------
+        # Flatten beam dimension
+        #
+        # [B, beam, L]
+        #       ->
+        # [B*beam, L]
+        # -------------------------------------------------
 
-            # Finished beams are kept as-is
-            if beam["finished"]:
-                candidates.append(beam)
-                continue
-
-            outputs = beam["tokens"]
-
-            # Target padding mask
-            trg_mask = (
-                outputs == padding_idx
-            ).unsqueeze(-2).float().to(device)
-
-            # Causal mask
-            look_ahead_mask = subsequent_mask(
-                outputs.size(1)
-            ).float().to(device)
-
-            combined_mask = torch.max(
-                trg_mask,
-                look_ahead_mask,
-            )
-
-            # Decoder
-            dec_output = model.decoder(
-                outputs,
-                memory,
-                combined_mask,
-                None,
-            )
-
-            logits = model.dense(dec_output)
-
-            # Only final position matters
-            next_logits = logits[:, -1, :]
-
-            log_probs = torch.log_softmax(
-                next_logits,
-                dim=-1,
-            )
-
-            # Top-K next tokens
-            top_log_probs, top_ids = torch.topk(
-                log_probs[0],
-                k=beam_size,
-            )
-
-            for log_prob, token_id in zip(
-                top_log_probs.tolist(),
-                top_ids.tolist(),
-            ):
-
-                next_token = torch.tensor(
-                    [[token_id]],
-                    dtype=src.dtype,
-                    device=device,
-                )
-
-                new_tokens = torch.cat(
-                    [
-                        outputs,
-                        next_token,
-                    ],
-                    dim=1,
-                )
-
-                candidates.append(
-                    {
-                        "tokens": new_tokens,
-                        "score": (
-                            beam["score"]
-                            + float(log_prob)
-                        ),
-                        "finished": (
-                            token_id == end_symbol
-                        ),
-                    }
-                )
-
-        # Rank candidates
-        candidates.sort(
-            key=normalized_score,
-            reverse=True,
+        flat_sequences = sequences.reshape(
+            batch_size * beam_size,
+            current_len,
         )
 
-        beams = candidates[:beam_size]
+        # -------------------------------------------------
+        # TARGET MASK
+        # -------------------------------------------------
 
-        # Optional debugging
-        if debug:
+        look_ahead_mask = subsequent_mask(
+            current_len
+        ).to(
+            device=device,
+            dtype=torch.float32,
+        )
 
-            print(
-                f"\n{'=' * 60}"
-            )
-            print(
-                f"Beam step {step + 1}"
-            )
-            print(
-                f"{'=' * 60}"
-            )
+        trg_padding_mask = (
+            (flat_sequences == padding_idx)
+            .unsqueeze(-2)
+            .float()
+        )
 
-            for rank, beam in enumerate(
-                beams,
-                start=1,
-            ):
+        combined_mask = torch.maximum(
+            trg_padding_mask,
+            look_ahead_mask,
+        )
 
-                tokens = (
-                    beam["tokens"][0]
-                    .detach()
-                    .cpu()
-                    .tolist()
-                )
+        # -------------------------------------------------
+        # DECODER
+        # -------------------------------------------------
 
-                if idx_to_token is not None:
-                    words = [
-                        idx_to_token.get(
-                            int(token),
-                            "<UNKNOWN>",
-                        )
-                        for token in tokens
-                    ]
+        dec_output = model.decoder(
+            flat_sequences,
+            memory_beam,
+            combined_mask,
+            src_mask_beam,
+        )
 
-                    text = " ".join(words)
+        # [B*beam, L, vocab]
+        logits = model.dense(
+            dec_output
+        )
 
-                else:
-                    text = str(tokens)
-
-                print(
-                    f"{rank:2d}. "
-                    f"score={beam['score']:.4f} "
-                    f"norm={normalized_score(beam):.4f} "
-                    f"finished={beam['finished']}"
-                )
-
-                print(
-                    f"    {text}"
-                )
-
-            # Stop when all beams finished
-            if all(
-                beam["finished"]
-                for beam in beams
-            ):
-                break
-
-        # Choose best beam
-        finished_beams = [
-            beam
-            for beam in beams
-            if beam["finished"]
+        # Last autoregressive position only
+        #
+        # [B*beam, vocab]
+        next_token_logits = logits[
+            :,
+            -1,
+            :,
         ]
 
-        if finished_beams:
-            best_beam = max(
-                finished_beams,
-                key=normalized_score,
-            )
-        else:
-            best_beam = max(
-                beams,
-                key=normalized_score,
+        vocab_size = (
+            next_token_logits.size(-1)
+        )
+
+        # -------------------------------------------------
+        # Block invalid/special tokens if requested
+        # -------------------------------------------------
+
+        if forbidden_token_ids:
+
+            valid_forbidden = [
+                token_id
+                for token_id
+                in forbidden_token_ids
+                if 0 <= token_id < vocab_size
+            ]
+
+            if valid_forbidden:
+
+                next_token_logits[
+                    :,
+                    valid_forbidden,
+                ] = float("-inf")
+
+        # -------------------------------------------------
+        # Convert to log probabilities
+        # -------------------------------------------------
+
+        log_probs = F.log_softmax(
+            next_token_logits,
+            dim=-1,
+        )
+
+        # Restore:
+        #
+        # [B, beam, vocab]
+        log_probs = log_probs.view(
+            batch_size,
+            beam_size,
+            vocab_size,
+        )
+
+        # =================================================
+        # FINISHED BEAMS
+        # =================================================
+        #
+        # Once a beam has produced END, force it to keep
+        # producing END without changing its score.
+        #
+        # This keeps tensor shapes simple.
+        # =================================================
+
+        if finished.any():
+
+            log_probs = log_probs.masked_fill(
+                finished.unsqueeze(-1),
+                float("-inf"),
             )
 
-        return best_beam["tokens"]
+            # END gets log-probability 0 for completed beams.
+            end_scores = log_probs[
+                :,
+                :,
+                end_idx,
+            ]
+
+            end_scores = torch.where(
+                finished,
+                torch.zeros_like(
+                    end_scores
+                ),
+                end_scores,
+            )
+
+            log_probs[
+                :,
+                :,
+                end_idx,
+            ] = end_scores
+
+        # =================================================
+        # COMBINE OLD BEAM SCORES + NEW TOKEN SCORES
+        # =================================================
+
+        candidate_scores = (
+            beam_scores.unsqueeze(-1)
+            +
+            log_probs
+        )
+
+        # [B, beam * vocab]
+        candidate_scores = (
+            candidate_scores.view(
+                batch_size,
+                -1,
+            )
+        )
+
+        # =================================================
+        # SELECT TOP-K CANDIDATES
+        # =================================================
+
+        top_scores, top_indices = torch.topk(
+            candidate_scores,
+            k=beam_size,
+            dim=-1,
+        )
+
+        # Determine:
+        #
+        # which previous beam?
+        # which vocabulary token?
+        #
+
+        source_beam = (
+            top_indices // vocab_size
+        )
+
+        next_tokens = (
+            top_indices % vocab_size
+        )
+
+        # =================================================
+        # GATHER PREVIOUS SEQUENCES
+        # =================================================
+
+        gather_index = (
+            source_beam
+            .unsqueeze(-1)
+            .expand(
+                -1,
+                -1,
+                current_len,
+            )
+        )
+
+        selected_sequences = torch.gather(
+            sequences,
+            dim=1,
+            index=gather_index,
+        )
+
+        # Append new tokens
+        sequences = torch.cat(
+            [
+                selected_sequences,
+                next_tokens.unsqueeze(-1),
+            ],
+            dim=-1,
+        )
+
+        # =================================================
+        # UPDATE FINISHED STATUS
+        # =================================================
+
+        previous_finished = torch.gather(
+            finished,
+            dim=1,
+            index=source_beam,
+        )
+
+        previous_lengths = torch.gather(
+            sequence_lengths,
+            dim=1,
+            index=source_beam,
+        )
+
+        just_finished = (
+            (~previous_finished)
+            &
+            (next_tokens == end_idx)
+        )
+
+        new_length = sequences.size(-1)
+
+        sequence_lengths = torch.where(
+            just_finished,
+            torch.full_like(
+                previous_lengths,
+                new_length,
+            ),
+            previous_lengths,
+        )
+
+        finished = (
+            previous_finished
+            |
+            (next_tokens == end_idx)
+        )
+
+        beam_scores = top_scores
+
+        # =================================================
+        # STOP IF ALL BEAMS FOR ALL SAMPLES FINISHED
+        # =================================================
+
+        if finished.all():
+            break
+
+    # =====================================================
+    # 7. FINAL LENGTH NORMALIZATION
+    # =====================================================
+
+    actual_length = sequences.size(-1)
+
+    # Beams that never generated EOS use actual generated len.
+    effective_lengths = torch.where(
+        finished,
+        sequence_lengths,
+        torch.full_like(
+            sequence_lengths,
+            actual_length,
+        ),
+    )
+
+    if length_penalty > 0:
+
+        # GNMT-style length penalty
+        #
+        # lp = ((5 + length) / 6)^alpha
+
+        length_norm = (
+            (
+                5.0
+                +
+                effective_lengths.float()
+            )
+            / 6.0
+        ).pow(
+            length_penalty
+        )
+
+        normalized_scores = (
+            beam_scores
+            /
+            length_norm
+        )
+
+    else:
+
+        normalized_scores = (
+            beam_scores
+        )
+
+    # =====================================================
+    # 8. SELECT BEST BEAM FOR EACH BATCH ITEM
+    # =====================================================
+
+    best_beam_idx = torch.argmax(
+        normalized_scores,
+        dim=-1,
+    )
+
+    batch_indices = torch.arange(
+        batch_size,
+        device=device,
+    )
+
+    best_sequences = sequences[
+        batch_indices,
+        best_beam_idx,
+    ]
+
+    # =====================================================
+    # 9. OPTIONAL ALL-BEAM OUTPUT
+    # =====================================================
+
+    if return_all_beams:
+        return (
+            best_sequences,
+            sequences,
+            normalized_scores,
+        )
+
+    return best_sequences
