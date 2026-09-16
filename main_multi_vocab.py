@@ -156,7 +156,7 @@ def main():
     """ preparing the dataset """
     vocab = json.load(open(args.vocab_file, 'rb'))
     token_to_idx = vocab['token_to_idx']
-    num_vocab = len(token_to_idx)
+    num_vocab = vocab['vocab_size']
     pad_idx = token_to_idx["<PAD>"]
     start_idx = token_to_idx["<START>"]
     end_idx = token_to_idx["<END>"]
