@@ -48,18 +48,18 @@ def parse_args():
         "--vocab-file", type=str, default="./data/train/europarl_bpe/vocab_bpe.json"
     )
     parser.add_argument(
-        "--teacher-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual_bpe/2026-08-23"
+        "--teacher-checkpoint", type=str, default="./checkpoints/deepsc-Rayleigh/multilingual_bpe/2026-09-15"
     )
     parser.add_argument(
         "--save-dir", type=str, default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd_bpe"
     )
 
     # model config (must match teacher checkpoint)
-    parser.add_argument("--max-len", type=int, default=33)
+    parser.add_argument("--max-len", type=int, default=67)
     parser.add_argument("--d-model", type=int, default=128)
     parser.add_argument("--dff", type=int, default=512)
-    parser.add_argument("--num-layers", type=int, default=4)
-    parser.add_argument("--num-heads", type=int, default=8)
+    parser.add_argument("--num-layers", type=int, default=8)
+    parser.add_argument("--num-heads", type=int, default=16)
     parser.add_argument("--dropout", type=float, default=0.1)
 
     # train
@@ -75,8 +75,8 @@ def parse_args():
     parser.add_argument("--channel", type=str, default="Rayleigh", choices=["AWGN", "Rayleigh", "Rician"])
     parser.add_argument("--snr-mode", type=str, default="range", choices=["fixed", "range"])
     parser.add_argument("--snr-db", type=float, default=8.0)
-    parser.add_argument("--snr-db-low", type=float, default=5.0)
-    parser.add_argument("--snr-db-high", type=float, default=10.0)
+    parser.add_argument("--snr-db-low", type=float, default=2.0)
+    parser.add_argument("--snr-db-high", type=float, default=18.0)
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
     # KD
@@ -428,12 +428,12 @@ def main():
         args.num_layers, 
         num_vocab,
         num_vocab,
-        num_vocab,
-        num_vocab,
+        args.max_len,
+        args.max_len,
         args.d_model,
         args.num_heads,
         args.dff,
-        0.1
+        dropout=args.dropout
     ).to(device)
 
     # deepsc = build_teacher(
@@ -446,8 +446,8 @@ def main():
     #     args.dropout, 
     #     device
     # )
-    enc_model_path = os.path.join(args.teacher_checkpoint, 'encoder_35.pth')
-    dec_model_path = os.path.join(args.teacher_checkpoint, 'decoder_35.pth')
+    enc_model_path = os.path.join(args.teacher_checkpoint, 'encoder_21.pth')
+    dec_model_path = os.path.join(args.teacher_checkpoint, 'decoder_21.pth')
 
     enc_checkpoint = torch.load(enc_model_path, map_location=device)
     dec_checkpoint = torch.load(dec_model_path, map_location=device)
@@ -474,23 +474,23 @@ def main():
     )
 
     student= Student(
-        2, 
+        4, 
         num_vocab, 
         num_vocab, 
         num_vocab, 
         num_vocab, 
         args.d_model, 
-        4, 
+        8, 
         args.dff, 
         args.dropout
     ).to(device)
 
-    # noise_std = snr_db_to_noise_std(float(args.snr_db))
-    noise_std = np.random.uniform(
-            snr_to_noise(args.snr_db_low), 
-            snr_to_noise(args.snr_db_high), 
-            # size=(1)
-        )
+    noise_std = snr_db_to_noise_std(float(args.snr_db))
+    # noise_std = np.random.uniform(
+    #         snr_to_noise(args.snr_db_low), 
+    #         snr_to_noise(args.snr_db_high), 
+    #         # size=(1)
+    #     )
 
     criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
     optimizer= torch.optim.Adam(
