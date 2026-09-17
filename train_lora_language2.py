@@ -204,12 +204,12 @@ def main():
     )
     parser.add_argument(
         "--student-checkpoint", 
-        default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd_bpe/one_student/2026-08-24"
+        default="./checkpoints/deepsc-Rayleigh/multi_vocab_kd_bpe/one_student/2026-09-17"
     )
     parser.add_argument(
         "--transmitter-checkpoint", 
         type=str, 
-        default="./checkpoints/deepsc-Rayleigh/multilingual_bpe/2026-08-23"
+        default="./checkpoints/deepsc-Rayleigh/multilingual_bpe/2026-09-15"
     )
     parser.add_argument("--save-lora", default="./checkpoints/deepsc-Rayleigh/lora_bpe")
 
@@ -289,8 +289,10 @@ def main():
         args.num_layers, 
         vocab_size, 
         vocab_size, 
-        vocab_size,
-        vocab_size, 
+        args.MAX_LEN,
+        args.MAX_LEN,
+        # vocab_size,
+        # vocab_size, 
         args.d_model, 
         args.num_heads, 
         args.dff, 0.1
@@ -299,19 +301,19 @@ def main():
     transmitter = Transmitter(deepsc.encoder, deepsc.channel_encoder).to(device)
 
     student = Student(
-        2, 
+        4, 
         vocab_size,
         vocab_size, 
         vocab_size,
         vocab_size, 
         args.d_model, 
-        4, 
+        8, 
         args.dff, 
         0.1
     ).to(device)
 
     # Load Weights
-    enc_model_path = os.path.join(args.transmitter_checkpoint, 'encoder_35.pth')
+    enc_model_path = os.path.join(args.transmitter_checkpoint, 'encoder_26.pth')
     student_1_path = os.path.join(args.student_checkpoint, 'student_03.pth')
 
     enc_checkpoint = torch.load(enc_model_path, map_location=device)
