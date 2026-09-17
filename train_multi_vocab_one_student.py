@@ -395,10 +395,9 @@ def main():
         vocab = json.load(f)
     
     token_to_idx = vocab["token_to_idx"]
-    num_vocab = len(token_to_idx)
+    num_vocab = vocab['vocab_size']
     
     pad_idx = token_to_idx["<PAD>"] if "<PAD>" in token_to_idx else token_to_idx[""]
-    print(pad_idx)
     
     start_idx = token_to_idx["<START>"]
     end_idx = token_to_idx["<END>"]
@@ -446,8 +445,8 @@ def main():
     #     args.dropout, 
     #     device
     # )
-    enc_model_path = os.path.join(args.teacher_checkpoint, 'encoder_21.pth')
-    dec_model_path = os.path.join(args.teacher_checkpoint, 'decoder_21.pth')
+    enc_model_path = os.path.join(args.teacher_checkpoint, 'encoder_26.pth')
+    dec_model_path = os.path.join(args.teacher_checkpoint, 'decoder_26.pth')
 
     enc_checkpoint = torch.load(enc_model_path, map_location=device)
     dec_checkpoint = torch.load(dec_model_path, map_location=device)
