@@ -219,7 +219,7 @@ def main():
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
     parser.add_argument("--epochs", default=50, type=int)
-    parser.add_argument("--batch-size", default=128, type=int)
+    parser.add_argument("--batch-size", default=64, type=int)
     parser.add_argument("--lr", default=1e-4, type=float)
 
     # Adapter hyperparameters
