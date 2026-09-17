@@ -194,6 +194,10 @@ def main():
     initNetParams(deepsc) # init net parameters
 
     best_val_loss = float("inf")
+
+    if not os.path.exists(root_dir):
+            os.makedirs(root_dir)
+    
     for epoch in range(args.epochs):
         start = time.time()
         
@@ -215,10 +219,7 @@ def main():
                 'time': end - start
             }
         )
-
-        if not os.path.exists(root_dir):
-            os.makedirs(root_dir)
-
+        
         if best_val_loss == 0.0:
             save_model(deepsc, root_dir, epoch)
             best_val_loss = val_loss
