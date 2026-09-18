@@ -106,10 +106,6 @@ def setup_seed(seed: int) -> None:
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-def snr_db_to_noise_std(snr_db: float) -> float:
-    # assuming unit power
-    return 10 ** (-snr_db / 20.0)
-
 @torch.no_grad()
 def validate_epoch(
     epoch,
@@ -484,7 +480,7 @@ def main():
         args.dropout
     ).to(device)
 
-    noise_std = snr_db_to_noise_std(float(args.snr_db))
+    noise_std = snr_to_noise(float(args.val_snr_db))
     # noise_std = np.random.uniform(
     #         snr_to_noise(args.snr_db_low), 
     #         snr_to_noise(args.snr_db_high), 
@@ -497,7 +493,7 @@ def main():
             lr=args.lr,
             betas=(0.9, 0.98),
             eps=1e-8,
-            weight_decay = 5e-4
+            weight_decay = args.weight_decay
         )
     
     best_val = float("inf")
