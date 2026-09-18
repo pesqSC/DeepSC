@@ -211,16 +211,11 @@ def validate_alignment(
 
 # Shared train/test split by ID
 def make_split_ids(
-    base_records: List[Dict[str, Any]],
-    train_ratio: float,
-    seed: int,
-) -> Tuple[set, set]:
-    """
-    Split using EN->EN record IDs.
-
-    All language datasets then use the same train/test IDs, which prevents
-    alignment from being broken by independent shuffles.
-    """
+    base_records,
+    train_ratio,
+    val_ratio,
+    seed,
+):
     ids = [record["id"] for record in base_records]
 
     if len(ids) != len(set(ids)):
@@ -229,12 +224,14 @@ def make_split_ids(
     rng = random.Random(seed)
     rng.shuffle(ids)
 
-    split_index = int(len(ids) * train_ratio)
+    train_end = int(len(ids) * train_ratio)
+    val_end = train_end + int(len(ids) * val_ratio)
 
-    train_ids = set(ids[:split_index])
-    test_ids = set(ids[split_index:])
+    train_ids = set(ids[:train_end])
+    val_ids = set(ids[train_end:val_end])
+    test_ids = set(ids[val_end:])
 
-    return train_ids, test_ids
+    return train_ids, val_ids, test_ids
 
 
 # BPE training corpus
@@ -807,7 +804,12 @@ def main() -> None:
     parser.add_argument(
         "--train-ratio",
         type=float,
-        default=0.9,
+        default=0.7,
+    )
+    parser.add_argument(
+        "--val-ratio",
+        type=float,
+        default=0.15,
     )
 
     parser.add_argument(
@@ -908,9 +910,10 @@ def main() -> None:
         print("Alignment OK.")
 
     # Shared split IDs
-    train_ids, test_ids = make_split_ids(
+    train_ids, val_ids, test_ids = make_split_ids(
         base_records=base_records,
         train_ratio=args.train_ratio,
+        val_ratio=args.val_ratio,
         seed=args.seed,
     )
 
@@ -918,6 +921,7 @@ def main() -> None:
     print("SHARED TRAIN / TEST SPLIT")
     print("=" * 70)
     print(f"Train IDs: {len(train_ids):,}")
+    print(f"Val IDs  : {len(val_ids):,}")
     print(f"Test IDs : {len(test_ids):,}")
 
     # Train/load BPE
@@ -1036,6 +1040,22 @@ def main() -> None:
             train_stats,
         )
 
+
+        print(f"\nCreating {dataset_name.upper()} VAL")
+
+        val_data, val_stats = make_dataset(
+            records=records,
+            tokenizer=tokenizer,
+            expected_target_language=target_language,
+            allowed_ids=val_ids,
+            min_len=args.min_len,
+            max_len=args.max_len,
+            dataset_name=dataset_name,
+        )
+
+        save_pickle(val_data, val_path)
+
+
         print(f"\nCreating {dataset_name.upper()} TEST")
 
         test_data, test_stats = make_dataset(
@@ -1056,6 +1076,11 @@ def main() -> None:
         train_path = os.path.join(
             args.output_dir,
             f"train_{dataset_name}.pkl",
+        )
+        
+        val_path = os.path.join(
+            args.output_dir,
+            f"val_{dataset_name}.pkl",
         )
 
         test_path = os.path.join(
