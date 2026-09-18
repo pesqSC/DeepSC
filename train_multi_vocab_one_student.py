@@ -398,7 +398,8 @@ def main():
     start_idx = token_to_idx["<START>"]
     end_idx = token_to_idx["<END>"]
 
-    train_set = EurParallelDatasetBPE(args.en, 'train')
+    train_set = EurParallelDatasetBPE(args.en, "train")
+    val_set = EurParallelDatasetBPE(args.en, "val")
     test_set = EurParallelDatasetBPE(args.en, "test")
 
     # load dataset
@@ -411,7 +412,7 @@ def main():
         collate_fn=collate_parallelBPE,
     )
     val_loader = DataLoader(
-        test_set,
+        val_set,
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.num_workers,
