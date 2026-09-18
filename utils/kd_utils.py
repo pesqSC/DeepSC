@@ -92,10 +92,16 @@ def feature_distillation_loss_cosine_normalized(
     cosine_sim = (student_norm * teacher_norm).sum(dim=-1)
     
     # MSE on cosine similarity (alternative formulation)
-    loss = F.mse_loss(cosine_sim, torch.ones_like(cosine_sim), reduction='none')
+    loss = F.mse_loss(
+        cosine_sim, 
+        torch.ones_like(cosine_sim), 
+        reduction='none'
+    )
     
     mask = (targets != pad_idx)
-    return (loss * mask).sum() / mask.sum().float()
+
+    num_valid = mask.sum().clamp_min(1)
+    return (loss * mask).sum() / num_valid.float()
 
 
 # Logit Distillation Loss - Cosine Similarity
