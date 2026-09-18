@@ -1053,8 +1053,6 @@ def main() -> None:
             dataset_name=dataset_name,
         )
 
-        save_pickle(val_data, val_path)
-
 
         print(f"\nCreating {dataset_name.upper()} TEST")
 
@@ -1089,10 +1087,12 @@ def main() -> None:
         )
 
         save_pickle(train_data, train_path)
+        save_pickle(val_data, val_path)
         save_pickle(test_data, test_path)
 
         print(f"\nSaved:")
         print(f"  {train_path}")
+        print(f"  {val_path}")
         print(f"  {test_path}")
 
     # Finished
