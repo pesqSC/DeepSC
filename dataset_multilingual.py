@@ -21,9 +21,9 @@ class EurParallelDatasetBPE(Dataset):
         split="train",
         data_dir="./data/train/europarl_bpe",
     ):
-        if split not in {"train", "test"}:
+        if split not in {"train", "val", "test"}:
             raise ValueError(
-                f"split must be 'train' or 'test', got {split!r}"
+                f"split must be 'train', 'val', or 'test', got {split!r}"
             )
 
         pkl_path = os.path.join(
