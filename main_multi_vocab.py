@@ -240,7 +240,7 @@ def main():
     parser.add_argument("--snr-db-high", type=float, default=18)
     parser.add_argument("--val-snr-db", type=float, default=8.0)
 
-    parser.add_argument('--MAX-LENGTH', default=68, type=int)
+    parser.add_argument('--MAX-LENGTH', default=67, type=int)
     parser.add_argument('--MIN-LENGTH', default=4, type=int)
     parser.add_argument('--d-model', default=128, type=int)
     parser.add_argument('--dff', default=512, type=int)
