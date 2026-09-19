@@ -67,7 +67,7 @@ def validate(epoch, args, pad_idx, criterion, net):
             src = src.to(device)
             trg = trg.to(device)
 
-            loss = val_step(
+            stats = val_step(
                 net,
                 src,
                 trg,
@@ -144,10 +144,13 @@ def train(epoch, args, pad_idx, optimizer, criterion, net)->float:
         src = src.to(device)
         trg = trg.to(device)
 
-        snr_db = np.random.uniform(
-            args.snr_db_low,
-            args.snr_db_high,
-        )
+        if args.snr_mode == "fixed":
+            snr_db = args.snr_db
+        else:
+            snr_db = np.random.uniform(
+                args.snr_db_low,
+                args.snr_db_high,
+            )
 
         noise_std = snr_to_noise(snr_db)
         snr_values.append(float(snr_db))
@@ -321,22 +324,25 @@ def main():
                 root_dir, f'results_{args.channel}_{today.strftime("%Y-%m-%d")}.csv'
             ), 
             epoch, 
-            {   
-                'epoch': epoch + 1,
+            {
                 "train_ce": train_stats["ce"],
                 "train_ppl": train_stats["perplexity"],
                 "train_token_acc": train_stats["token_accuracy"],
+
+                "val_ce": val_stats["ce"],
+                "val_ppl": val_stats["perplexity"],
+                "val_token_acc": val_stats["token_accuracy"],
+
                 "train_snr_mean": train_stats["snr_mean"],
                 "train_snr_min": train_stats["snr_min"],
                 "train_snr_max": train_stats["snr_max"],
-                "val_loss": val_stats["ce"]
+                "val_snr_db": val_stats["snr_db"],
+
+                "lr": optimizer.param_groups[0]["lr"],
+                "epoch_time_sec": end - start,
             }
         )
         
-        if best_val_loss == 0.0:
-            save_model(deepsc, root_dir, epoch)
-            best_val_loss = val_loss
-
         if val_stats["ce"] < best_val_loss:
             save_model(
                 deepsc,
@@ -346,7 +352,7 @@ def main():
 
             best_val_loss = val_stats["ce"]
         
-    record_loss = []
+    # record_loss = []
 
 if __name__ == '__main__':
     import torch
