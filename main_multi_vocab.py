@@ -3,6 +3,7 @@
 @author: Prinako
 """
 import os
+import math
 import argparse
 import time
 import json
@@ -38,76 +39,172 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 def validate(epoch, args, pad_idx, criterion, net):
-    test_eur = EurParallelDatasetBPE(args.en, 'test')
-    test_iterator = DataLoader(test_eur, batch_size=args.batch_size, num_workers=0,
-                                pin_memory=True, collate_fn=collate_parallelBPE)
-    net.eval()
-    pbar = tqdm(test_iterator)
+    val_eur = EurParallelDatasetBPE(args.en, 'val')
     
-    total: float = 0.0
-    num_batches: int = 0
+    val_iterator = DataLoader(
+        val_eur,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=True,
+        collate_fn=collate_parallelBPE,
+    )
+
+    net.eval()
+    pbar = tqdm(val_iterator)
+    
+    total_ce_sum = 0.0
+    total_correct = 0
+    total_tokens = 0
+
+    # Fixed validation SNR
+    noise_std = snr_to_noise(
+        args.val_snr_db
+    )
+
     with torch.no_grad():
         for src, trg in pbar:
             src = src.to(device)
             trg = trg.to(device)
+
             loss = val_step(
-                        net, src, trg, 0.1, pad_idx,
-                        criterion, args.channel
-                    )
-
-            total += loss
-            num_batches += 1
-
-            pbar.set_description(
-                'Epoch: {}; Type: VAL; Loss: {:.5f}'.format(
-                    epoch + 1, loss
-                )
+                net,
+                src,
+                trg,
+                noise_std,
+                pad_idx,
+                criterion,
+                args.channel,
             )
 
-    return total / max(num_batches, 1)
+            total_ce_sum += (
+                stats["ce"]
+                * stats["num_tokens"]
+            )
+
+            total_correct += stats["num_correct"]
+            total_tokens += stats["num_tokens"]
+
+            pbar.set_description(
+                f"Epoch: {epoch + 1}; Type: VAL"
+            )
+
+            pbar.set_postfix(
+                CE=f"{stats['ce']:.4f}",
+                PPL=f"{stats['perplexity']:.2f}",
+                ACC=f"{stats['token_accuracy']:.4f}",
+                SNR=f"{args.val_snr_db:.1f}",
+            )
+    epoch_ce = (
+        total_ce_sum
+        / max(total_tokens, 1)
+    )
+
+    epoch_ppl = math.exp(
+        min(epoch_ce, 700.0)
+    )
+
+    epoch_token_accuracy = (
+        total_correct
+        / max(total_tokens, 1)
+    )
+
+    return {
+        "ce": epoch_ce,
+        "perplexity": epoch_ppl,
+        "token_accuracy": epoch_token_accuracy,
+        "num_tokens": total_tokens,
+        "snr_db": float(args.val_snr_db),
+    }
 
 
 def train(epoch, args, pad_idx, optimizer, criterion, net)->float:
     train_eur= EurParallelDatasetBPE(args.en, 'train')
-    train_iterator = DataLoader(train_eur, batch_size=args.batch_size, num_workers=0,
-                                pin_memory=True, collate_fn=collate_parallelBPE)
+    
+    train_iterator = DataLoader(
+        train_eur,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=True,
+        collate_fn=collate_parallelBPE,
+    )
+
     pbar = tqdm(train_iterator)
 
-    noise_std = np.random.uniform(snr_to_noise(5), snr_to_noise(10), size=(1))
+    # total_loss: float = 0.0
+    # num_batches: int = 0
+    total_ce_sum: float = 0.0
+    total_correct: int = 0
+    total_tokens: int = 0
 
-    total_loss: float = 0.0
-    num_batches: int = 0
+    snr_values = []
 
     for src, trg in pbar:
         src = src.to(device)
         trg = trg.to(device)
 
-        loss = train_step(
-                    net, src, trg, noise_std[0], pad_idx,
-                    optimizer, criterion, args.channel
-                )
-        
-        pbar.set_description(
-            'Epoch: {};  Type: Train; Loss: {:.5f}'.format(
-                epoch + 1, loss
-            )
+        snr_db = np.random.uniform(
+            args.snr_db_low,
+            args.snr_db_high,
         )
 
-        total_loss += loss
-        num_batches += 1
+        noise_std = snr_to_noise(snr_db)
+        snr_values.append(float(snr_db))
 
-        # if mi_net is not None:
-        #     mi = train_mi(net, mi_net, src, trg, 0.1, pad_idx, mi_opt, args.channel)
-        #     loss = train_step(net, src, trg, 0.1, pad_idx,
-        #                       optimizer, criterion, args.channel, mi_net)
-        #     pbar.set_description(
-        #         'Epoch: {};  Type: Train; Loss: {:.5f}; MI {:.5f}'.format(
-        #             epoch + 1, loss, mi
+        # loss = train_step(
+        #             net, src, trg, noise_std, pad_idx,
+        #             optimizer, criterion, args.channel
         #         )
-        #     )
-        # else:
-    
-    return total_loss / max(num_batches, 1)
+
+        stats = train_step(
+            net,
+            src,
+            trg,
+            noise_std,
+            pad_idx,
+            optimizer,
+            criterion,
+            args.channel,
+        )
+
+        total_ce_sum += (
+            stats["ce"] * stats["num_tokens"]
+        )
+
+        total_correct += stats["num_correct"]
+        total_tokens += stats["num_tokens"]
+        
+        pbar.set_description(
+            f"Epoch: {epoch + 1}; Type: Train"
+        )
+
+        pbar.set_postfix(
+            CE=f"{stats['ce']:.4f}",
+            PPL=f"{stats['perplexity']:.2f}",
+            ACC=f"{stats['token_accuracy']:.4f}",
+            SNR=f"{snr_db:.2f}",
+        )
+
+    epoch_ce = total_ce_sum / max(total_tokens, 1)
+
+    epoch_ppl = math.exp(
+        min(epoch_ce, 700.0)
+    )
+
+    epoch_token_accuracy = (
+        total_correct / max(total_tokens, 1)
+    )
+
+    return {
+        "ce": epoch_ce,
+        "perplexity": epoch_ppl,
+        "token_accuracy": epoch_token_accuracy,
+        "num_tokens": total_tokens,
+        "snr_mean": float(np.mean(snr_values)),
+        "snr_min": float(np.min(snr_values)),
+        "snr_max": float(np.max(snr_values)),
+    }
 
 def save_model(net: DeepSC, root_dir: str, epoch: int):
     encoder_state_dict = {
@@ -132,8 +229,15 @@ def main():
     #parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
     parser.add_argument('--vocab-file', default='europarl_bpe/vocab_bpe.json', type=str)
     parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh/multilingual_bpe', type=str)
-    parser.add_argument('--channel', default='Rayleigh', type=str, help = 'Please choose AWGN, Rayleigh, and Rician')
-    parser.add_argument('--MAX-LENGTH', default=67, type=int)
+    # channel
+    parser.add_argument("--channel", type=str, default="Rayleigh", choices=["AWGN", "Rayleigh", "Rician"])
+    parser.add_argument("--snr-mode", type=str, default="range", choices=["fixed", "range"])
+    parser.add_argument("--snr-db", type=float, default=8.0)
+    parser.add_argument("--snr-db-low", type=float, default=2)
+    parser.add_argument("--snr-db-high", type=float, default=18)
+    parser.add_argument("--val-snr-db", type=float, default=8.0)
+
+    parser.add_argument('--MAX-LENGTH', default=68, type=int)
     parser.add_argument('--MIN-LENGTH', default=4, type=int)
     parser.add_argument('--d-model', default=128, type=int)
     parser.add_argument('--dff', default=512, type=int)
@@ -141,6 +245,7 @@ def main():
     parser.add_argument('--num-heads', default=16, type=int)
     parser.add_argument('--batch-size', default=32, type=int)
     parser.add_argument('--epochs', default=50, type=int) 
+
     parser.add_argument('--en', default='en_en', type=str)
     parser.add_argument('--en-pt', default='en_pt', type=str)
     parser.add_argument('--en-es', default='en_es', type=str)
@@ -152,7 +257,9 @@ def main():
     parser.add_argument('--pt-fr', default='pt_fr', type=str)
 
     args = parser.parse_args()
+
     args.vocab_file = './data/train/' + args.vocab_file
+
     """ preparing the dataset """
     vocab = json.load(open(args.vocab_file, 'rb'))
     token_to_idx = vocab['token_to_idx']
@@ -197,26 +304,32 @@ def main():
 
     if not os.path.exists(root_dir):
             os.makedirs(root_dir)
+
+    
     
     for epoch in range(args.epochs):
         start = time.time()
         
 
-        loss = train(epoch, args, pad_idx, optimizer, criterion, deepsc)
-        val_loss = validate(epoch, args, pad_idx, criterion, deepsc)
+        train_stats = train(epoch, args, pad_idx, optimizer, criterion, deepsc)
+        val_stats = validate(epoch, args, pad_idx, criterion, deepsc)
 
         end = time.time()
         
         save_epoch_results(
             os.path.join(
-                root_dir, f'results_{args.channel}_{date.today().strftime("%Y-%m-%d")}.csv'
+                root_dir, f'results_{args.channel}_{today.strftime("%Y-%m-%d")}.csv'
             ), 
             epoch, 
             {   
                 'epoch': epoch + 1,
-                'loss': loss,
-                'val_loss': val_loss,
-                'time': end - start
+                "train_ce": train_stats["ce"],
+                "train_ppl": train_stats["perplexity"],
+                "train_token_acc": train_stats["token_accuracy"],
+                "train_snr_mean": train_stats["snr_mean"],
+                "train_snr_min": train_stats["snr_min"],
+                "train_snr_max": train_stats["snr_max"],
+                "val_loss": val_stats["ce"]
             }
         )
         
@@ -224,9 +337,14 @@ def main():
             save_model(deepsc, root_dir, epoch)
             best_val_loss = val_loss
 
-        if val_loss < best_val_loss:
-            save_model(deepsc, root_dir, epoch)
-            best_val_loss = val_loss
+        if val_stats["ce"] < best_val_loss:
+            save_model(
+                deepsc,
+                root_dir,
+                epoch
+            )
+
+            best_val_loss = val_stats["ce"]
         
     record_loss = []
 
