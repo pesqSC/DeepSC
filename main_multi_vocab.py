@@ -412,7 +412,7 @@ def build_parser():
     parser.add_argument("--dff", default=512, type=int)
     parser.add_argument("--num-layers", default=8, type=int)
     parser.add_argument("--num-heads", default=16, type=int)
-    parser.add_argument("--batch-size", default=92, type=int)
+    parser.add_argument("--batch-size", default=80, type=int)
     parser.add_argument("--epochs", default=50, type=int)
     parser.add_argument("--learning-rate", default=1e-4, type=float)
 
