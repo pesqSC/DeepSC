@@ -44,22 +44,45 @@ def train_step(model, src, trg, n_var, pad, opt, criterion, channel, mi_net=None
     #y_est = x +  torch.matmul(n, torch.inverse(H))
     #loss1 = torch.mean(torch.pow((x_est - y_est.view(x_est.shape)), 2))
 
-    loss = loss_function(pred.contiguous().view(-1, ntokens), 
-                         trg_real.contiguous().view(-1), 
-                         pad, criterion)
+    # loss = loss_function(pred.contiguous().view(-1, ntokens), 
+    #                      trg_real.contiguous().view(-1), 
+    #                      pad, criterion)
 
-    if mi_net is not None:
-        mi_net.eval()
-        joint, marginal = sample_batch(Tx_sig, Rx_sig)
-        mi_lb, _, _ = mutual_information(joint, marginal, mi_net)
-        loss_mine = -mi_lb
-        loss = loss + 0.0009 * loss_mine
-    # loss = loss_function(pred, trg_real, pad)
+    ce_loss, batch_ppl = masked_ce_loss(
+        logits=pred,
+        targets=trg_real,
+        pad_idx=pad,
+        label_smoothing=0.0,
+    )
+
+    with torch.no_grad():
+        pred_ids = pred.argmax(dim=-1)
+
+        valid_mask = (trg_real != pad)
+        num_valid = valid_mask.sum()
+
+        num_correct = (
+            (pred_ids == trg_real) & valid_mask
+        ).sum()
+
+        token_accuracy = (
+            num_correct.float()
+            / num_valid.clamp_min(1).float()
+        )
+
+
+    loss = ce_loss
 
     loss.backward()
     opt.step()
-
-    return loss.item()
+    
+    return {
+        "ce": float(ce_loss.item()),
+        "perplexity": float(batch_ppl),
+        "token_accuracy": float(token_accuracy.item()),
+        "num_tokens": int(num_valid.item()),
+        "num_correct": int(num_correct.item()),
+    }
 
 
 def train_mi(model, mi_net, src, n_var, padding_idx, opt, channel, device):
@@ -116,12 +139,42 @@ def val_step(model, src, trg, n_var, pad, criterion, channel):
 
     # pred = model(src, trg_inp, src_mask, look_ahead_mask, n_var)
     ntokens = pred.size(-1)
-    loss = loss_function(pred.contiguous().view(-1, ntokens), 
-                         trg_real.contiguous().view(-1), 
-                         pad, criterion)
-    # loss = loss_function(pred, trg_real, pad)
+    # loss = loss_function(pred.contiguous().view(-1, ntokens), 
+    #                      trg_real.contiguous().view(-1), 
+    #                      pad, criterion)
     
-    return loss.item()
+    ce_loss, batch_ppl = masked_ce_loss(
+        logits=pred,
+        targets=trg_real,
+        pad_idx=pad,
+        label_smoothing=0.0,
+    )
+
+    with torch.no_grad():
+        pred_ids = pred.argmax(dim=-1)
+
+        valid_mask = (trg_real != pad)
+        num_valid = valid_mask.sum()
+
+        num_correct = (
+            (pred_ids == trg_real) & valid_mask
+        ).sum()
+
+        token_accuracy = (
+            num_correct.float()
+            / num_valid.clamp_min(1).float()
+        )
+
+
+    loss = ce_loss
+    
+    return {
+        "ce": float(ce_loss.item()),
+        "perplexity": float(batch_ppl),
+        "token_accuracy": float(token_accuracy.item()),
+        "num_tokens": int(num_valid.item()),
+        "num_correct": int(num_correct.item()),
+    }
 
 
 @torch.no_grad()
@@ -354,10 +407,12 @@ def validate_multi_epoch(
 
 
 def loss_function(x, trg, padding_idx, criterion):
-    
     loss = criterion(x, trg)
-    mask = (trg != padding_idx).type_as(loss.data)
-    # a = mask.cpu().numpy()
-    loss *= mask
-    
-    return loss.mean()
+
+    mask = (trg != padding_idx).type_as(loss)
+
+    loss = loss * mask
+
+    num_valid = mask.sum().clamp_min(1.0)
+
+    return loss.sum() / num_valid
